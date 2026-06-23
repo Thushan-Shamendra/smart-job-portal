@@ -127,3 +127,25 @@ export const loginUser = async (req, res) => {
       });
     }
 };
+
+// Get logged-in user profile
+export const getMe = async (req, res) => {
+    try {
+      res.status(200).json({
+        success: true,
+        user: {
+          id: req.user._id,
+          name: req.user.name,
+          email: req.user.email,
+          role: req.user.role,
+          phone: req.user.phone,
+          isActive: req.user.isActive,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+};
