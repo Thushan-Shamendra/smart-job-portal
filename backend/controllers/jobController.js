@@ -1,4 +1,5 @@
 import Job from "../models/Job.js";
+import Profile from "../models/Profile.js";
 
 // Create new job
 export const createJob = async (req, res) => {
@@ -205,4 +206,64 @@ export const deleteJob = async (req, res) => {
       message: error.message,
     });
   }
+};
+
+// Get recommended jobs based on job seeker skills
+export const getRecommendedJobs = async (req, res) => {
+    try {
+      const profile = await Profile.findOne({ user: req.user._id });
+  
+      if (!profile) {
+        return res.status(404).json({
+          success: false,
+          message: "Please create your profile first to get job recommendations",
+        });
+      }
+  
+      if (!profile.skills || profile.skills.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Please add skills to your profile",
+        });
+      }
+  
+      const jobs = await Job.find({ isActive: true })
+        .populate("employer", "name email role")
+        .sort({ createdAt: -1 });
+  
+      const userSkills = profile.skills.map((skill) => skill.toLowerCase());
+  
+      const recommendedJobs = jobs
+        .map((job) => {
+          const jobSkills = job.skills.map((skill) => skill.toLowerCase());
+  
+          const matchedSkills = jobSkills.filter((skill) =>
+            userSkills.includes(skill)
+          );
+  
+          const matchPercentage =
+            jobSkills.length > 0
+              ? Math.round((matchedSkills.length / jobSkills.length) * 100)
+              : 0;
+  
+          return {
+            job,
+            matchedSkills,
+            matchPercentage,
+          };
+        })
+        .filter((item) => item.matchPercentage > 0)
+        .sort((a, b) => b.matchPercentage - a.matchPercentage);
+  
+      res.status(200).json({
+        success: true,
+        count: recommendedJobs.length,
+        recommendedJobs,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
 };
