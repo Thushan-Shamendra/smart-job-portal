@@ -67,12 +67,21 @@ export default function DashboardPage() {
             <h2 className="font-semibold">Employer Dashboard</h2>
             <p>You can post jobs and manage applicants.</p>
 
+            <div className="flex gap-3 mt-4">
             <a
-            href="/employer/add-job"
-            className="inline-block mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                href="/employer/add-job"
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
             >
-            Post New Job
+                Post New Job
             </a>
+
+            <a
+                href="/employer/my-jobs"
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+                My Jobs
+            </a>
+            </div>
         </div>
         )}
 
