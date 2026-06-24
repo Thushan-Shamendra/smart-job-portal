@@ -52,6 +52,13 @@ export default function DashboardPage() {
           <div className="mt-6 p-4 bg-blue-50 rounded">
             <h2 className="font-semibold">Job Seeker Dashboard</h2>
             <p>You can search jobs, apply jobs, and manage your profile.</p>
+
+            <a
+                href="/my-applications"
+                className="inline-block mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+                My Applications
+            </a>
           </div>
         )}
 
