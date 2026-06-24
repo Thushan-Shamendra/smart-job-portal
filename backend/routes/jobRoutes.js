@@ -1,12 +1,13 @@
 import express from "express";
 import {
-  createJob,
-  getJobs,
-  getJobById,
-  updateJob,
-  deleteJob,
-  getRecommendedJobs,
-} from "../controllers/jobController.js";
+    createJob,
+    getJobs,
+    getJobById,
+    updateJob,
+    deleteJob,
+    getRecommendedJobs,
+    getMyJobs,
+  } from "../controllers/jobController.js";
 
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
@@ -22,6 +23,14 @@ router.get(
   authorizeRoles("jobseeker"),
   getRecommendedJobs
 );
+
+// Employer route
+router.get(
+    "/my-jobs",
+    protect,
+    authorizeRoles("employer"),
+    getMyJobs
+  );
 
 // Public single job route
 router.get("/:id", getJobById);
