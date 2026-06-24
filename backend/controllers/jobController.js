@@ -267,3 +267,22 @@ export const getRecommendedJobs = async (req, res) => {
       });
     }
 };
+
+// Employer: get logged-in employer jobs
+export const getMyJobs = async (req, res) => {
+    try {
+      const jobs = await Job.find({ employer: req.user._id })
+        .sort({ createdAt: -1 });
+  
+      res.status(200).json({
+        success: true,
+        count: jobs.length,
+        jobs,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+};
