@@ -5,6 +5,7 @@ import {
   getJobById,
   updateJob,
   deleteJob,
+  getRecommendedJobs,
 } from "../controllers/jobController.js";
 
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
@@ -13,6 +14,16 @@ const router = express.Router();
 
 // Public routes
 router.get("/", getJobs);
+
+// Job seeker route
+router.get(
+  "/recommended",
+  protect,
+  authorizeRoles("jobseeker"),
+  getRecommendedJobs
+);
+
+// Public single job route
 router.get("/:id", getJobById);
 
 // Employer routes
