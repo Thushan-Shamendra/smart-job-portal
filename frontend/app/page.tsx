@@ -24,6 +24,13 @@ export default function HomePage() {
           >
             Login
           </a>
+
+          <a
+            href="/jobs"
+            className="border border-green-600 text-green-600 px-6 py-3 rounded hover:bg-green-50"
+          >
+            Browse Jobs
+          </a>
         </div>
       </div>
     </main>
