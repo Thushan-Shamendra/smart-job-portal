@@ -63,10 +63,17 @@ export default function DashboardPage() {
         )}
 
         {user.role === "employer" && (
-          <div className="mt-6 p-4 bg-green-50 rounded">
+        <div className="mt-6 p-4 bg-green-50 rounded">
             <h2 className="font-semibold">Employer Dashboard</h2>
             <p>You can post jobs and manage applicants.</p>
-          </div>
+
+            <a
+            href="/employer/add-job"
+            className="inline-block mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+            >
+            Post New Job
+            </a>
+        </div>
         )}
 
         {user.role === "admin" && (
