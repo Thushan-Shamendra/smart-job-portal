@@ -49,17 +49,33 @@ export default function DashboardPage() {
         </div>
 
         {user.role === "jobseeker" && (
-          <div className="mt-6 p-4 bg-blue-50 rounded">
+        <div className="mt-6 p-4 bg-blue-50 rounded">
             <h2 className="font-semibold">Job Seeker Dashboard</h2>
             <p>You can search jobs, apply jobs, and manage your profile.</p>
 
+            <div className="flex gap-3 mt-4">
+            <a
+                href="/my-profile"
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+            >
+                My Profile
+            </a>
+
             <a
                 href="/my-applications"
-                className="inline-block mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
             >
                 My Applications
             </a>
-          </div>
+
+            <a
+                href="/jobs"
+                className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+            >
+                Browse Jobs
+            </a>
+            </div>
+        </div>
         )}
 
         {user.role === "employer" && (
