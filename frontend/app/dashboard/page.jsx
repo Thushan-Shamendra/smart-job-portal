@@ -109,10 +109,17 @@ export default function DashboardPage() {
         )}
 
         {user.role === "admin" && (
-          <div className="mt-6 p-4 bg-purple-50 rounded">
+        <div className="mt-6 p-4 bg-purple-50 rounded">
             <h2 className="font-semibold">Admin Dashboard</h2>
             <p>You can manage users, jobs, and applications.</p>
-          </div>
+
+            <a
+            href="/admin/dashboard"
+            className="inline-block mt-4 bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+            >
+            Admin Panel
+            </a>
+        </div>
         )}
 
         <button
