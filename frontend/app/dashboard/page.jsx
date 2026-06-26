@@ -62,6 +62,13 @@ export default function DashboardPage() {
             </a>
 
             <a
+                href="/recommended-jobs"
+                className="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700"
+            >
+                Recommended Jobs
+           </a>
+
+            <a
                 href="/my-applications"
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
             >
