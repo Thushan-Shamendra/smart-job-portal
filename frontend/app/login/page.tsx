@@ -3,26 +3,44 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+type LoginFormData = {
+  email: string;
+  password: string;
+};
+
+type LoginResponse = {
+  success: boolean;
+  message?: string;
+  token?: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    role: "jobseeker" | "employer" | "admin";
+  };
+};
+
 export default function LoginPage() {
   const router = useRouter();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<LoginFormData>({
     email: "",
     password: "",
   });
 
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
   };
 
-  const handleLogin = async (e) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     setError("");
     setLoading(true);
 
@@ -38,10 +56,15 @@ export default function LoginPage() {
         }
       );
 
-      const data = await res.json();
+      const data: LoginResponse = await res.json();
 
       if (!res.ok) {
         setError(data.message || "Login failed");
+        return;
+      }
+
+      if (!data.token || !data.user) {
+        setError("Invalid login response");
         return;
       }
 
@@ -49,7 +72,7 @@ export default function LoginPage() {
       localStorage.setItem("user", JSON.stringify(data.user));
 
       router.push("/dashboard");
-    } catch (error) {
+    } catch {
       setError("Something went wrong");
     } finally {
       setLoading(false);
@@ -62,14 +85,10 @@ export default function LoginPage() {
         onSubmit={handleLogin}
         className="bg-white p-8 rounded-lg shadow-md w-full max-w-md"
       >
-        <h1 className="text-2xl font-bold mb-6 text-center">
-          Login
-        </h1>
+        <h1 className="text-2xl font-bold mb-6 text-center">Login</h1>
 
         {error && (
-          <p className="bg-red-100 text-red-600 p-3 rounded mb-4">
-            {error}
-          </p>
+          <p className="bg-red-100 text-red-600 p-3 rounded mb-4">{error}</p>
         )}
 
         <input
@@ -95,7 +114,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700"
+          className="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700 disabled:bg-blue-400"
         >
           {loading ? "Logging in..." : "Login"}
         </button>
