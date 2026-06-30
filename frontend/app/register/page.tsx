@@ -1,30 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+
+type UserRole = "jobseeker" | "employer";
+
+type RegisterFormData = {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+};
+
+type RegisterResponse = {
+  success: boolean;
+  message?: string;
+  token?: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    role: "jobseeker" | "employer" | "admin";
+  };
+};
 
 export default function RegisterPage() {
   const router = useRouter();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<RegisterFormData>({
     name: "",
     email: "",
     password: "",
     role: "jobseeker",
   });
 
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  const handleChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+
+    setFormData((prevData) => ({
+      ...prevData,
+      [name]: value,
+    }));
   };
 
-  const handleRegister = async (e) => {
+  const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     setError("");
     setLoading(true);
 
@@ -40,10 +66,15 @@ export default function RegisterPage() {
         }
       );
 
-      const data = await res.json();
+      const data: RegisterResponse = await res.json();
 
       if (!res.ok) {
         setError(data.message || "Registration failed");
+        return;
+      }
+
+      if (!data.token || !data.user) {
+        setError("Invalid registration response");
         return;
       }
 
@@ -51,7 +82,7 @@ export default function RegisterPage() {
       localStorage.setItem("user", JSON.stringify(data.user));
 
       router.push("/dashboard");
-    } catch (error) {
+    } catch {
       setError("Something went wrong");
     } finally {
       setLoading(false);
@@ -117,7 +148,7 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700"
+          className="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700 disabled:bg-blue-400"
         >
           {loading ? "Creating Account..." : "Register"}
         </button>
