@@ -1,13 +1,91 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+type UserRole = "jobseeker" | "employer" | "admin";
+
+type LoggedUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+};
+
+type ProfileFormData = {
+  headline: string;
+  bio: string;
+  location: string;
+  skills: string;
+  cvUrl: string;
+  portfolioUrl: string;
+  githubUrl: string;
+  linkedinUrl: string;
+  educationSchool: string;
+  educationDegree: string;
+  educationField: string;
+  educationFrom: string;
+  educationTo: string;
+  experienceCompany: string;
+  experiencePosition: string;
+  experienceFrom: string;
+  experienceTo: string;
+  experienceDescription: string;
+};
+
+type Education = {
+  school: string;
+  degree: string;
+  fieldOfStudy?: string;
+  from?: string;
+  to?: string;
+};
+
+type Experience = {
+  company: string;
+  position: string;
+  from?: string;
+  to?: string;
+  description?: string;
+};
+
+type Profile = {
+  headline?: string;
+  bio?: string;
+  location?: string;
+  skills?: string[];
+  cvUrl?: string;
+  portfolioUrl?: string;
+  githubUrl?: string;
+  linkedinUrl?: string;
+  education?: Education[];
+  experience?: Experience[];
+};
+
+type ProfileResponse = {
+  success: boolean;
+  message?: string;
+  profile?: Profile;
+};
+
+type SaveProfileData = {
+  headline: string;
+  bio: string;
+  location: string;
+  skills: string[];
+  cvUrl: string;
+  portfolioUrl: string;
+  githubUrl: string;
+  linkedinUrl: string;
+  education: Education[];
+  experience: Experience[];
+};
 
 export default function MyProfilePage() {
   const router = useRouter();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ProfileFormData>({
     headline: "",
     bio: "",
     location: "",
@@ -28,83 +106,93 @@ export default function MyProfilePage() {
     experienceDescription: "",
   });
 
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const fetchProfile = async () => {
-    const token = localStorage.getItem("token");
-    const user = JSON.parse(localStorage.getItem("user"));
-
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    if (user?.role !== "jobseeker") {
-      router.push("/dashboard");
-      return;
-    }
-
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json();
-
-      if (res.status === 404) {
-        return;
-      }
-
-      if (!res.ok) {
-        setError(data.message || "Failed to fetch profile");
-        return;
-      }
-
-      const profile = data.profile;
-
-      setFormData({
-        headline: profile.headline || "",
-        bio: profile.bio || "",
-        location: profile.location || "",
-        skills: profile.skills?.join(", ") || "",
-        cvUrl: profile.cvUrl || "",
-        portfolioUrl: profile.portfolioUrl || "",
-        githubUrl: profile.githubUrl || "",
-        linkedinUrl: profile.linkedinUrl || "",
-
-        educationSchool: profile.education?.[0]?.school || "",
-        educationDegree: profile.education?.[0]?.degree || "",
-        educationField: profile.education?.[0]?.fieldOfStudy || "",
-        educationFrom: profile.education?.[0]?.from || "",
-        educationTo: profile.education?.[0]?.to || "",
-
-        experienceCompany: profile.experience?.[0]?.company || "",
-        experiencePosition: profile.experience?.[0]?.position || "",
-        experienceFrom: profile.experience?.[0]?.from || "",
-        experienceTo: profile.experience?.[0]?.to || "",
-        experienceDescription: profile.experience?.[0]?.description || "",
-      });
-    } catch (error) {
-      setError("Something went wrong");
-    }
-  };
+  const [message, setMessage] = useState<string>("");
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    fetchProfile();
-  }, []);
+    const fetchProfile = async () => {
+      const token = localStorage.getItem("token");
+      const user: LoggedUser | null = JSON.parse(
+        localStorage.getItem("user") || "null"
+      );
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      if (user?.role !== "jobseeker") {
+        router.push("/dashboard");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data: ProfileResponse = await res.json();
+
+        if (res.status === 404) {
+          return;
+        }
+
+        if (!res.ok) {
+          setError(data.message || "Failed to fetch profile");
+          return;
+        }
+
+        if (!data.profile) {
+          return;
+        }
+
+        const profile = data.profile;
+
+        setFormData({
+          headline: profile.headline || "",
+          bio: profile.bio || "",
+          location: profile.location || "",
+          skills: profile.skills?.join(", ") || "",
+          cvUrl: profile.cvUrl || "",
+          portfolioUrl: profile.portfolioUrl || "",
+          githubUrl: profile.githubUrl || "",
+          linkedinUrl: profile.linkedinUrl || "",
+
+          educationSchool: profile.education?.[0]?.school || "",
+          educationDegree: profile.education?.[0]?.degree || "",
+          educationField: profile.education?.[0]?.fieldOfStudy || "",
+          educationFrom: profile.education?.[0]?.from || "",
+          educationTo: profile.education?.[0]?.to || "",
+
+          experienceCompany: profile.experience?.[0]?.company || "",
+          experiencePosition: profile.experience?.[0]?.position || "",
+          experienceFrom: profile.experience?.[0]?.from || "",
+          experienceTo: profile.experience?.[0]?.to || "",
+          experienceDescription: profile.experience?.[0]?.description || "",
+        });
+      } catch {
+        setError("Something went wrong");
+      }
+    };
+
+    fetchProfile();
+  }, [router]);
+
+  const handleChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+
+    setFormData((prevData) => ({
+      ...prevData,
+      [name]: value,
+    }));
   };
 
-  const handleSaveProfile = async (e) => {
+  const handleSaveProfile = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setMessage("");
@@ -113,7 +201,39 @@ export default function MyProfilePage() {
 
     const token = localStorage.getItem("token");
 
-    const profileData = {
+    if (!token) {
+      setLoading(false);
+      router.push("/login");
+      return;
+    }
+
+    const education: Education[] =
+      formData.educationSchool && formData.educationDegree
+        ? [
+            {
+              school: formData.educationSchool,
+              degree: formData.educationDegree,
+              fieldOfStudy: formData.educationField,
+              from: formData.educationFrom,
+              to: formData.educationTo,
+            },
+          ]
+        : [];
+
+    const experience: Experience[] =
+      formData.experienceCompany && formData.experiencePosition
+        ? [
+            {
+              company: formData.experienceCompany,
+              position: formData.experiencePosition,
+              from: formData.experienceFrom,
+              to: formData.experienceTo,
+              description: formData.experienceDescription,
+            },
+          ]
+        : [];
+
+    const profileData: SaveProfileData = {
       headline: formData.headline,
       bio: formData.bio,
       location: formData.location,
@@ -126,26 +246,8 @@ export default function MyProfilePage() {
       portfolioUrl: formData.portfolioUrl,
       githubUrl: formData.githubUrl,
       linkedinUrl: formData.linkedinUrl,
-
-      education: [
-        {
-          school: formData.educationSchool,
-          degree: formData.educationDegree,
-          fieldOfStudy: formData.educationField,
-          from: formData.educationFrom,
-          to: formData.educationTo,
-        },
-      ],
-
-      experience: [
-        {
-          company: formData.experienceCompany,
-          position: formData.experiencePosition,
-          from: formData.experienceFrom,
-          to: formData.experienceTo,
-          description: formData.experienceDescription,
-        },
-      ],
+      education,
+      experience,
     };
 
     try {
@@ -158,7 +260,7 @@ export default function MyProfilePage() {
         body: JSON.stringify(profileData),
       });
 
-      const data = await res.json();
+      const data: ProfileResponse = await res.json();
 
       if (!res.ok) {
         setError(data.message || "Failed to save profile");
@@ -166,7 +268,7 @@ export default function MyProfilePage() {
       }
 
       setMessage("Profile saved successfully");
-    } catch (error) {
+    } catch {
       setError("Something went wrong");
     } finally {
       setLoading(false);
@@ -380,7 +482,7 @@ export default function MyProfilePage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700"
+            className="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700 disabled:bg-blue-400"
           >
             {loading ? "Saving Profile..." : "Save Profile"}
           </button>
