@@ -4,49 +4,78 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+type ApplicationStatus =
+  | "Pending"
+  | "Reviewed"
+  | "Shortlisted"
+  | "Rejected"
+  | "Accepted";
+
+type AppliedJob = {
+  _id: string;
+  title: string;
+  company: string;
+  location: string;
+  jobType: string;
+  salary: string;
+};
+
+type JobApplication = {
+  _id: string;
+  job?: AppliedJob;
+  status: ApplicationStatus;
+  createdAt: string;
+};
+
+type ApplicationsResponse = {
+  success: boolean;
+  message?: string;
+  applications: JobApplication[];
+};
+
 export default function MyApplicationsPage() {
   const router = useRouter();
 
-  const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [applications, setApplications] = useState<JobApplication[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
 
-  const fetchApplications = async () => {
-    const token = localStorage.getItem("token");
+  useEffect(() => {
+    const fetchApplications = async () => {
+      const token = localStorage.getItem("token");
 
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/applications/my-applications`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || "Failed to fetch applications");
+      if (!token) {
+        router.push("/login");
         return;
       }
 
-      setApplications(data.applications);
-    } catch (error) {
-      setError("Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/applications/my-applications`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-  useEffect(() => {
+        const data: ApplicationsResponse = await res.json();
+
+        if (!res.ok) {
+          setError(data.message || "Failed to fetch applications");
+          return;
+        }
+
+        setApplications(data.applications);
+      } catch {
+        setError("Something went wrong");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchApplications();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return <p className="p-6">Loading applications...</p>;
