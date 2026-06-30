@@ -1,20 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
+type ApplyJobResponse = {
+  success: boolean;
+  message?: string;
+  application?: unknown;
+};
+
 export default function ApplyJobPage() {
-  const { id } = useParams();
+  const params = useParams();
   const router = useRouter();
 
-  const [coverLetter, setCoverLetter] = useState("");
-  const [cvUrl, setCvUrl] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const id = params.id as string;
 
-  const handleApply = async (e) => {
+  const [coverLetter, setCoverLetter] = useState<string>("");
+  const [cvUrl, setCvUrl] = useState<string>("");
+  const [message, setMessage] = useState<string>("");
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const handleApply = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setMessage("");
@@ -24,6 +32,7 @@ export default function ApplyJobPage() {
     const token = localStorage.getItem("token");
 
     if (!token) {
+      setLoading(false);
       router.push("/login");
       return;
     }
@@ -44,7 +53,7 @@ export default function ApplyJobPage() {
         }
       );
 
-      const data = await res.json();
+      const data: ApplyJobResponse = await res.json();
 
       if (!res.ok) {
         setError(data.message || "Failed to apply for job");
@@ -56,11 +65,19 @@ export default function ApplyJobPage() {
       setTimeout(() => {
         router.push("/dashboard");
       }, 1500);
-    } catch (error) {
+    } catch {
       setError("Something went wrong");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCoverLetterChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    setCoverLetter(e.target.value);
+  };
+
+  const handleCvUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setCvUrl(e.target.value);
   };
 
   return (
@@ -70,9 +87,7 @@ export default function ApplyJobPage() {
           Back to Job Details
         </Link>
 
-        <h1 className="text-3xl font-bold mt-4 mb-6">
-          Apply for Job
-        </h1>
+        <h1 className="text-3xl font-bold mt-4 mb-6">Apply for Job</h1>
 
         {message && (
           <p className="bg-green-100 text-green-700 p-3 rounded mb-4">
@@ -87,26 +102,22 @@ export default function ApplyJobPage() {
         )}
 
         <form onSubmit={handleApply}>
-          <label className="block mb-2 font-medium">
-            Cover Letter
-          </label>
+          <label className="block mb-2 font-medium">Cover Letter</label>
 
           <textarea
             value={coverLetter}
-            onChange={(e) => setCoverLetter(e.target.value)}
+            onChange={handleCoverLetterChange}
             placeholder="Write a short cover letter"
             className="w-full border p-3 rounded mb-4 h-40"
             required
           />
 
-          <label className="block mb-2 font-medium">
-            CV URL
-          </label>
+          <label className="block mb-2 font-medium">CV URL</label>
 
           <input
             type="text"
             value={cvUrl}
-            onChange={(e) => setCvUrl(e.target.value)}
+            onChange={handleCvUrlChange}
             placeholder="https://example.com/my-cv.pdf"
             className="w-full border p-3 rounded mb-4"
           />
@@ -114,7 +125,7 @@ export default function ApplyJobPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-green-600 text-white p-3 rounded hover:bg-green-700"
+            className="w-full bg-green-600 text-white p-3 rounded hover:bg-green-700 disabled:bg-green-400"
           >
             {loading ? "Submitting..." : "Submit Application"}
           </button>
