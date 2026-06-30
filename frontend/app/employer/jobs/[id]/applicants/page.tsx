@@ -1,66 +1,126 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
+type UserRole = "jobseeker" | "employer" | "admin";
+
+type LoggedUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+};
+
+type ApplicationStatus =
+  | "Pending"
+  | "Reviewed"
+  | "Shortlisted"
+  | "Rejected"
+  | "Accepted";
+
+type Applicant = {
+  _id: string;
+  name: string;
+  email: string;
+  phone?: string;
+};
+
+type Job = {
+  _id: string;
+  title: string;
+  company?: string;
+  location?: string;
+  jobType?: string;
+};
+
+type JobApplication = {
+  _id: string;
+  job?: Job;
+  applicant?: Applicant;
+  coverLetter?: string;
+  cvUrl?: string;
+  status: ApplicationStatus;
+  createdAt: string;
+};
+
+type ApplicationsResponse = {
+  success: boolean;
+  message?: string;
+  applications: JobApplication[];
+};
+
+type StatusUpdateResponse = {
+  success: boolean;
+  message?: string;
+  application?: JobApplication;
+};
+
 export default function ApplicantsPage() {
-  const { id } = useParams();
+  const params = useParams();
   const router = useRouter();
 
-  const [applications, setApplications] = useState([]);
-  const [jobTitle, setJobTitle] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const id = params.id as string;
 
-  const fetchApplicants = async () => {
-    const token = localStorage.getItem("token");
-    const user = JSON.parse(localStorage.getItem("user"));
+  const [applications, setApplications] = useState<JobApplication[]>([]);
+  const [jobTitle, setJobTitle] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
 
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    if (user?.role !== "employer") {
-      router.push("/dashboard");
-      return;
-    }
-
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/applications/job/${id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+  useEffect(() => {
+    const fetchApplicants = async () => {
+      const token = localStorage.getItem("token");
+      const user: LoggedUser | null = JSON.parse(
+        localStorage.getItem("user") || "null"
       );
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || "Failed to fetch applicants");
+      if (!token) {
+        router.push("/login");
         return;
       }
 
-      setApplications(data.applications);
-
-      if (data.applications.length > 0) {
-        setJobTitle(data.applications[0].job?.title);
+      if (user?.role !== "employer") {
+        router.push("/dashboard");
+        return;
       }
-    } catch (error) {
-      setError("Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  useEffect(() => {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/applications/job/${id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data: ApplicationsResponse = await res.json();
+
+        if (!res.ok) {
+          setError(data.message || "Failed to fetch applicants");
+          return;
+        }
+
+        setApplications(data.applications);
+
+        if (data.applications.length > 0) {
+          setJobTitle(data.applications[0].job?.title || "");
+        }
+      } catch {
+        setError("Something went wrong");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchApplicants();
-  }, []);
+  }, [id, router]);
 
-  const handleStatusChange = async (applicationId, newStatus) => {
+  const handleStatusChange = async (
+    applicationId: string,
+    newStatus: ApplicationStatus
+  ) => {
     const token = localStorage.getItem("token");
 
     try {
@@ -78,15 +138,15 @@ export default function ApplicantsPage() {
         }
       );
 
-      const data = await res.json();
+      const data: StatusUpdateResponse = await res.json();
 
       if (!res.ok) {
         alert(data.message || "Failed to update status");
         return;
       }
 
-      setApplications(
-        applications.map((application) =>
+      setApplications((prevApplications) =>
+        prevApplications.map((application) =>
           application._id === applicationId
             ? { ...application, status: newStatus }
             : application
@@ -94,9 +154,16 @@ export default function ApplicantsPage() {
       );
 
       alert("Application status updated successfully");
-    } catch (error) {
+    } catch {
       alert("Something went wrong");
     }
+  };
+
+  const handleSelectChange = (
+    e: ChangeEvent<HTMLSelectElement>,
+    applicationId: string
+  ) => {
+    handleStatusChange(applicationId, e.target.value as ApplicationStatus);
   };
 
   if (loading) {
@@ -124,9 +191,7 @@ export default function ApplicantsPage() {
         </div>
 
         {error && (
-          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">
-            {error}
-          </p>
+          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</p>
         )}
 
         {applications.length === 0 ? (
@@ -170,9 +235,7 @@ export default function ApplicantsPage() {
 
                   <select
                     value={application.status}
-                    onChange={(e) =>
-                      handleStatusChange(application._id, e.target.value)
-                    }
+                    onChange={(e) => handleSelectChange(e, application._id)}
                     className="border p-2 rounded"
                   >
                     <option value="Pending">Pending</option>
@@ -195,6 +258,7 @@ export default function ApplicantsPage() {
                     <a
                       href={application.cvUrl}
                       target="_blank"
+                      rel="noopener noreferrer"
                       className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
                     >
                       View CV
