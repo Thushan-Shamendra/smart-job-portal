@@ -1,13 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 
+type Job = {
+  _id: string;
+  title: string;
+  company: string;
+  location: string;
+  jobType: string;
+  salary: string;
+  skills?: string[];
+};
+
+type JobsResponse = {
+  success: boolean;
+  message?: string;
+  jobs: Job[];
+};
+
 export default function JobsPage() {
-  const [jobs, setJobs] = useState([]);
-  const [search, setSearch] = useState("");
-  const [location, setLocation] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [search, setSearch] = useState<string>("");
+  const [location, setLocation] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
 
   const fetchJobs = async () => {
     try {
@@ -25,13 +41,13 @@ export default function JobsPage() {
       }
 
       const res = await fetch(url);
-      const data = await res.json();
+      const data: JobsResponse = await res.json();
 
       if (data.success) {
         setJobs(data.jobs);
       }
-    } catch (error) {
-      console.log("Failed to fetch jobs", error);
+    } catch {
+      console.log("Failed to fetch jobs");
     } finally {
       setLoading(false);
     }
@@ -41,9 +57,17 @@ export default function JobsPage() {
     fetchJobs();
   }, []);
 
-  const handleSearch = (e) => {
+  const handleSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     fetchJobs();
+  };
+
+  const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+  };
+
+  const handleLocationChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setLocation(e.target.value);
   };
 
   return (
@@ -65,7 +89,7 @@ export default function JobsPage() {
             type="text"
             placeholder="Search by title, company, or skill"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleSearchChange}
             className="border p-3 rounded"
           />
 
@@ -73,7 +97,7 @@ export default function JobsPage() {
             type="text"
             placeholder="Location"
             value={location}
-            onChange={(e) => setLocation(e.target.value)}
+            onChange={handleLocationChange}
             className="border p-3 rounded"
           />
 
