@@ -4,57 +4,91 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+type UserRole = "jobseeker" | "employer" | "admin";
+
+type LoggedUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+};
+
+type Job = {
+  _id: string;
+  title: string;
+  company: string;
+  location: string;
+  jobType: string;
+  salary: string;
+  deadline: string;
+  skills?: string[];
+  isActive: boolean;
+};
+
+type MyJobsResponse = {
+  success: boolean;
+  message?: string;
+  jobs: Job[];
+};
+
+type DeleteJobResponse = {
+  success: boolean;
+  message?: string;
+};
+
 export default function MyJobsPage() {
   const router = useRouter();
 
-  const [jobs, setJobs] = useState([]);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const fetchMyJobs = async () => {
-    const token = localStorage.getItem("token");
-    const user = JSON.parse(localStorage.getItem("user"));
-
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    if (user?.role !== "employer") {
-      router.push("/dashboard");
-      return;
-    }
-
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/jobs/my-jobs`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+  useEffect(() => {
+    const fetchMyJobs = async () => {
+      const token = localStorage.getItem("token");
+      const user: LoggedUser | null = JSON.parse(
+        localStorage.getItem("user") || "null"
       );
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || "Failed to fetch jobs");
+      if (!token) {
+        router.push("/login");
         return;
       }
 
-      setJobs(data.jobs);
-    } catch (error) {
-      setError("Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (user?.role !== "employer") {
+        router.push("/dashboard");
+        return;
+      }
 
-  useEffect(() => {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/jobs/my-jobs`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data: MyJobsResponse = await res.json();
+
+        if (!res.ok) {
+          setError(data.message || "Failed to fetch jobs");
+          return;
+        }
+
+        setJobs(data.jobs);
+      } catch {
+        setError("Something went wrong");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchMyJobs();
-  }, []);
+  }, [router]);
 
-  const handleDelete = async (jobId) => {
+  const handleDelete = async (jobId: string) => {
     const confirmDelete = confirm("Are you sure you want to delete this job?");
 
     if (!confirmDelete) {
@@ -74,15 +108,15 @@ export default function MyJobsPage() {
         }
       );
 
-      const data = await res.json();
+      const data: DeleteJobResponse = await res.json();
 
       if (!res.ok) {
         alert(data.message || "Failed to delete job");
         return;
       }
 
-      setJobs(jobs.filter((job) => job._id !== jobId));
-    } catch (error) {
+      setJobs((prevJobs) => prevJobs.filter((job) => job._id !== jobId));
+    } catch {
       alert("Something went wrong");
     }
   };
@@ -184,6 +218,7 @@ export default function MyJobsPage() {
                   </Link>
 
                   <button
+                    type="button"
                     onClick={() => handleDelete(job._id)}
                     className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
                   >
