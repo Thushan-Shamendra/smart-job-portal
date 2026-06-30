@@ -3,9 +3,18 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+type UserRole = "jobseeker" | "employer" | "admin";
+
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem("user");
@@ -16,7 +25,8 @@ export default function DashboardPage() {
       return;
     }
 
-    setUser(JSON.parse(savedUser));
+    const parsedUser: User = JSON.parse(savedUser);
+    setUser(parsedUser);
   }, [router]);
 
   const handleLogout = () => {
@@ -49,77 +59,77 @@ export default function DashboardPage() {
         </div>
 
         {user.role === "jobseeker" && (
-        <div className="mt-6 p-4 bg-blue-50 rounded">
+          <div className="mt-6 p-4 bg-blue-50 rounded">
             <h2 className="font-semibold">Job Seeker Dashboard</h2>
             <p>You can search jobs, apply jobs, and manage your profile.</p>
 
-            <div className="flex gap-3 mt-4">
-            <a
+            <div className="flex flex-wrap gap-3 mt-4">
+              <a
                 href="/my-profile"
                 className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-            >
+              >
                 My Profile
-            </a>
+              </a>
 
-            <a
+              <a
                 href="/recommended-jobs"
                 className="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700"
-            >
+              >
                 Recommended Jobs
-           </a>
+              </a>
 
-            <a
+              <a
                 href="/my-applications"
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            >
+              >
                 My Applications
-            </a>
+              </a>
 
-            <a
+              <a
                 href="/jobs"
                 className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
-            >
+              >
                 Browse Jobs
-            </a>
+              </a>
             </div>
-        </div>
+          </div>
         )}
 
         {user.role === "employer" && (
-        <div className="mt-6 p-4 bg-green-50 rounded">
+          <div className="mt-6 p-4 bg-green-50 rounded">
             <h2 className="font-semibold">Employer Dashboard</h2>
             <p>You can post jobs and manage applicants.</p>
 
-            <div className="flex gap-3 mt-4">
-            <a
+            <div className="flex flex-wrap gap-3 mt-4">
+              <a
                 href="/employer/add-job"
                 className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-            >
+              >
                 Post New Job
-            </a>
+              </a>
 
-            <a
+              <a
                 href="/employer/my-jobs"
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            >
+              >
                 My Jobs
-            </a>
+              </a>
             </div>
-        </div>
+          </div>
         )}
 
         {user.role === "admin" && (
-        <div className="mt-6 p-4 bg-purple-50 rounded">
+          <div className="mt-6 p-4 bg-purple-50 rounded">
             <h2 className="font-semibold">Admin Dashboard</h2>
             <p>You can manage users, jobs, and applications.</p>
 
             <a
-            href="/admin/dashboard"
-            className="inline-block mt-4 bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+              href="/admin/dashboard"
+              className="inline-block mt-4 bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
             >
-            Admin Panel
+              Admin Panel
             </a>
-        </div>
+          </div>
         )}
 
         <button
