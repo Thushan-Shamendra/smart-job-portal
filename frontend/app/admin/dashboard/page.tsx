@@ -4,55 +4,87 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+type UserRole = "jobseeker" | "employer" | "admin";
+
+type LoggedUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+};
+
+type AdminStats = {
+  totalUsers: number;
+  totalJobSeekers: number;
+  totalEmployers: number;
+  totalAdmins: number;
+  totalJobs: number;
+  activeJobs: number;
+  totalApplications: number;
+};
+
+type DashboardResponse = {
+  success: boolean;
+  message?: string;
+  stats?: AdminStats;
+};
+
 export default function AdminDashboardPage() {
   const router = useRouter();
 
-  const [stats, setStats] = useState(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const fetchDashboardStats = async () => {
-    const token = localStorage.getItem("token");
-    const user = JSON.parse(localStorage.getItem("user") || "null");
-
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    if (user?.role !== "admin") {
-      router.push("/dashboard");
-      return;
-    }
-
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/dashboard`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      const token = localStorage.getItem("token");
+      const user: LoggedUser | null = JSON.parse(
+        localStorage.getItem("user") || "null"
       );
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || "Failed to fetch admin dashboard");
+      if (!token) {
+        router.push("/login");
         return;
       }
 
-      setStats(data.stats);
-    } catch (error) {
-      setError("Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (user?.role !== "admin") {
+        router.push("/dashboard");
+        return;
+      }
 
-  useEffect(() => {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/admin/dashboard`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data: DashboardResponse = await res.json();
+
+        if (!res.ok) {
+          setError(data.message || "Failed to fetch admin dashboard");
+          return;
+        }
+
+        if (!data.stats) {
+          setError("Invalid dashboard response");
+          return;
+        }
+
+        setStats(data.stats);
+      } catch {
+        setError("Something went wrong");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchDashboardStats();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return <p className="p-6">Loading admin dashboard...</p>;
@@ -150,9 +182,7 @@ export default function AdminDashboardPage() {
                 href="/admin/applications"
                 className="bg-white p-6 rounded-lg shadow hover:shadow-md"
               >
-                <h2 className="text-xl font-bold mb-2">
-                  Manage Applications
-                </h2>
+                <h2 className="text-xl font-bold mb-2">Manage Applications</h2>
                 <p className="text-gray-600">
                   View all job applications in the system.
                 </p>
