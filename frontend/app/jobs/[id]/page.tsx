@@ -4,12 +4,34 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
+type Job = {
+  _id: string;
+  title: string;
+  company: string;
+  description: string;
+  requirements: string;
+  skills?: string[];
+  location: string;
+  salary: string;
+  jobType: string;
+  category: string;
+  deadline: string;
+};
+
+type JobResponse = {
+  success: boolean;
+  message?: string;
+  job?: Job;
+};
+
 export default function JobDetailsPage() {
-  const { id } = useParams();
+  const params = useParams();
   const router = useRouter();
 
-  const [job, setJob] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const id = params.id as string;
+
+  const [job, setJob] = useState<Job | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const fetchJob = async () => {
@@ -18,13 +40,13 @@ export default function JobDetailsPage() {
           `${process.env.NEXT_PUBLIC_API_URL}/jobs/${id}`
         );
 
-        const data = await res.json();
+        const data: JobResponse = await res.json();
 
-        if (data.success) {
+        if (data.success && data.job) {
           setJob(data.job);
         }
-      } catch (error) {
-        console.log("Failed to fetch job", error);
+      } catch {
+        console.log("Failed to fetch job");
       } finally {
         setLoading(false);
       }
@@ -97,6 +119,7 @@ export default function JobDetailsPage() {
         </div>
 
         <button
+          type="button"
           onClick={() => router.push(`/jobs/${job._id}/apply`)}
           className="bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700"
         >
