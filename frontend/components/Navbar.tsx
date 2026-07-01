@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 type UserRole = "jobseeker" | "employer" | "admin";
 
@@ -43,8 +44,16 @@ export default function Navbar() {
   return (
     <nav className="bg-white shadow">
       <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-        <Link href="/" className="text-2xl font-bold text-blue-600">
-          Smart Job Portal
+        <Link href="/" className="flex items-center gap-2">
+            <Image
+                src="/images/jobpilot-icon.png"
+                alt="JobPilot Logo"
+                width={42}
+                height={42}
+                className="rounded"
+            />
+
+            <span className="text-2xl font-bold text-blue-600">JobPilot</span>
         </Link>
 
         <div className="flex items-center gap-5">

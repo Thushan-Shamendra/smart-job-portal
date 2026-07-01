@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 type Feature = {
   title: string;
@@ -61,6 +62,16 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-blue-700 to-blue-500 text-white">
         <div className="max-w-7xl mx-auto px-6 py-24 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div className="mb-6">
+            <Image
+              src="/images/jobpilot-logo-full.png"
+              alt="JobPilot Logo"
+              width={260}
+              height={260}
+              priority
+              className="bg-white rounded-2xl p-4 shadow-lg"
+            />
+          </div>
           <div>
             <p className="uppercase tracking-widest text-blue-100 font-semibold mb-4">
               Full Stack Smart Job Portal
