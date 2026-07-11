@@ -221,7 +221,7 @@ export default function RecommendedJobsPage() {
                     </Link>
 
                     <Link
-                      href={`/jobs/${item.job._id}/apply`}
+                      href={`/apply/${item.job._id}`}
                       className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
                     >
                       Apply Now

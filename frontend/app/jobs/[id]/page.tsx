@@ -120,7 +120,7 @@ export default function JobDetailsPage() {
 
         <button
           type="button"
-          onClick={() => router.push(`/jobs/${job._id}/apply`)}
+          onClick={() => router.push(`/apply/${job._id}`)}
           className="bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700"
         >
           Apply Now

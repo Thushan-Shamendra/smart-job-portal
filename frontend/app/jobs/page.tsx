@@ -25,7 +25,7 @@ export default function JobsPage() {
   const [location, setLocation] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (searchValue: string, locationValue: string) => {
     try {
       setLoading(true);
 
@@ -33,8 +33,8 @@ export default function JobsPage() {
 
       const params = new URLSearchParams();
 
-      if (search) params.append("search", search);
-      if (location) params.append("location", location);
+      if (searchValue) params.append("search", searchValue);
+      if (locationValue) params.append("location", locationValue);
 
       if (params.toString()) {
         url += `?${params.toString()}`;
@@ -54,12 +54,16 @@ export default function JobsPage() {
   };
 
   useEffect(() => {
-    fetchJobs();
+    const loadJobs = async () => {
+      await fetchJobs("", "");
+    };
+
+    void loadJobs();
   }, []);
 
   const handleSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    fetchJobs();
+    void fetchJobs(search, location);
   };
 
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {

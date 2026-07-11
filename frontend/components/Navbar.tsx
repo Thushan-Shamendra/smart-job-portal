@@ -21,11 +21,10 @@ export default function Navbar() {
   const [user, setUser] = useState<LoggedUser | null>(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("user");
-
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    Promise.resolve().then(() => {
+      const savedUser = localStorage.getItem("user");
+      setUser(savedUser ? (JSON.parse(savedUser) as LoggedUser) : null);
+    });
   }, [pathname]);
 
   const handleLogout = () => {

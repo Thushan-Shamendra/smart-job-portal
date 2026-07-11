@@ -3,6 +3,7 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { downloadApplicationCV } from "@/lib/downloadApplicationCV";
 
 type UserRole = "jobseeker" | "employer" | "admin";
 
@@ -40,7 +41,13 @@ type JobApplication = {
   job?: Job;
   applicant?: Applicant;
   coverLetter?: string;
-  cvUrl?: string;
+  cv?: {
+    originalName?: string;
+    filename?: string;
+    contentType?: string;
+    size?: number;
+  };
+  extractedSkills?: string[];
   status: ApplicationStatus;
   createdAt: string;
 };
@@ -67,6 +74,8 @@ export default function ApplicantsPage() {
   const [jobTitle, setJobTitle] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+  const [downloadError, setDownloadError] = useState<string>("");
+  const [downloadingId, setDownloadingId] = useState<string>("");
 
   useEffect(() => {
     const fetchApplicants = async () => {
@@ -166,6 +175,37 @@ export default function ApplicantsPage() {
     handleStatusChange(applicationId, e.target.value as ApplicationStatus);
   };
 
+  const handleDownloadCV = async (
+    applicationId: string,
+    originalName?: string
+  ) => {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    setDownloadError("");
+    setDownloadingId(applicationId);
+
+    try {
+      await downloadApplicationCV(
+        applicationId,
+        token,
+        originalName || "candidate-cv"
+      );
+    } catch (downloadFailure) {
+      setDownloadError(
+        downloadFailure instanceof Error
+          ? downloadFailure.message
+          : "Something went wrong while downloading the CV."
+      );
+    } finally {
+      setDownloadingId("");
+    }
+  };
+
   if (loading) {
     return <p className="p-6">Loading applicants...</p>;
   }
@@ -192,6 +232,12 @@ export default function ApplicantsPage() {
 
         {error && (
           <p className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</p>
+        )}
+
+        {downloadError && (
+          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">
+            {downloadError}
+          </p>
         )}
 
         {applications.length === 0 ? (
@@ -253,16 +299,42 @@ export default function ApplicantsPage() {
                   </p>
                 </div>
 
+                <div className="mt-4">
+                  <h3 className="font-semibold mb-2">Extracted Skills</h3>
+
+                  {application.extractedSkills &&
+                  application.extractedSkills.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {application.extractedSkills.map((skill) => (
+                        <span
+                          key={`${application._id}-${skill}`}
+                          className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-600">No extracted skills found.</p>
+                  )}
+                </div>
+
                 <div className="flex gap-3 mt-4">
-                  {application.cvUrl && (
-                    <a
-                      href={application.cvUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                  {application.cv && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDownloadCV(
+                          application._id,
+                          application.cv?.originalName
+                        )
+                      }
                       className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
                     >
-                      View CV
-                    </a>
+                      {downloadingId === application._id
+                        ? "Downloading CV..."
+                        : "Download CV"}
+                    </button>
                   )}
 
                   <Link

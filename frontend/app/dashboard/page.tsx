@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type UserRole = "jobseeker" | "employer" | "admin";
@@ -17,16 +18,18 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("user");
-    const token = localStorage.getItem("token");
+    Promise.resolve().then(() => {
+      const savedUser = localStorage.getItem("user");
+      const token = localStorage.getItem("token");
 
-    if (!savedUser || !token) {
-      router.push("/login");
-      return;
-    }
+      if (!savedUser || !token) {
+        router.push("/login");
+        return;
+      }
 
-    const parsedUser: User = JSON.parse(savedUser);
-    setUser(parsedUser);
+      const parsedUser: User = JSON.parse(savedUser);
+      setUser(parsedUser);
+    });
   }, [router]);
 
   const handleLogout = () => {
@@ -64,33 +67,33 @@ export default function DashboardPage() {
             <p>You can search jobs, apply jobs, and manage your profile.</p>
 
             <div className="flex flex-wrap gap-3 mt-4">
-              <a
+              <Link
                 href="/my-profile"
                 className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
               >
                 My Profile
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/recommended-jobs"
                 className="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700"
               >
                 Recommended Jobs
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/my-applications"
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
               >
                 My Applications
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/jobs"
                 className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
               >
                 Browse Jobs
-              </a>
+              </Link>
             </div>
           </div>
         )}
@@ -101,19 +104,19 @@ export default function DashboardPage() {
             <p>You can post jobs and manage applicants.</p>
 
             <div className="flex flex-wrap gap-3 mt-4">
-              <a
+              <Link
                 href="/employer/add-job"
                 className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
               >
                 Post New Job
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/employer/my-jobs"
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
               >
                 My Jobs
-              </a>
+              </Link>
             </div>
           </div>
         )}
@@ -123,12 +126,12 @@ export default function DashboardPage() {
             <h2 className="font-semibold">Admin Dashboard</h2>
             <p>You can manage users, jobs, and applications.</p>
 
-            <a
+            <Link
               href="/admin/dashboard"
               className="inline-block mt-4 bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
             >
               Admin Panel
-            </a>
+            </Link>
           </div>
         )}
 
