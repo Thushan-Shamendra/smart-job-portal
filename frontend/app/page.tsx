@@ -1,311 +1,459 @@
-import Link from "next/link";
+"use client";
+
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { type FormEvent, useState } from "react";
 
-type Feature = {
+type Job = {
+  id: string;
   title: string;
-  description: string;
+  company: string;
+  location: string;
+  salary: string;
+  type: string;
+  skills: string[];
+  posted: string;
 };
 
-type Step = {
-  number: string;
-  title: string;
-  description: string;
-};
-
-const features: Feature[] = [
+const featuredJobs: Job[] = [
   {
-    title: "Skill-Based Job Recommendations",
-    description:
-      "Job seekers receive recommended jobs based on their saved skills and profile details.",
+    id: "1",
+    title: "Frontend Developer",
+    company: "Global Systems",
+    location: "Colombo",
+    salary: "Rs. 150,000",
+    type: "Full-time",
+    skills: ["React", "Next.js", "TypeScript"],
+    posted: "2 days ago",
   },
   {
-    title: "Role-Based Dashboards",
-    description:
-      "Separate dashboards are available for job seekers, employers, and admins.",
+    id: "2",
+    title: "Backend Developer",
+    company: "TechNova",
+    location: "Remote",
+    salary: "Rs. 180,000",
+    type: "Remote",
+    skills: ["Node.js", "Express", "MongoDB"],
+    posted: "5 hours ago",
   },
   {
-    title: "Application Tracking",
-    description:
-      "Applicants can track job application status such as pending, reviewed, shortlisted, rejected, and accepted.",
-  },
-  {
-    title: "Employer Job Management",
-    description:
-      "Employers can create, update, delete, and manage job posts from their dashboard.",
-  },
-];
-
-const steps: Step[] = [
-  {
-    number: "01",
-    title: "Create an Account",
-    description:
-      "Register as a job seeker or employer and access your role-based dashboard.",
-  },
-  {
-    number: "02",
-    title: "Complete Your Profile",
-    description:
-      "Job seekers can add skills, education, experience, and CV links.",
-  },
-  {
-    number: "03",
-    title: "Apply or Hire",
-    description:
-      "Job seekers apply for jobs while employers manage applicants and statuses.",
+    id: "3",
+    title: "UI/UX Designer",
+    company: "Creative Labs",
+    location: "Colombo",
+    salary: "Rs. 120,000",
+    type: "Contract",
+    skills: ["Figma", "UX", "Design"],
+    posted: "1 day ago",
   },
 ];
 
 export default function HomePage() {
+  const router = useRouter();
+
+  const [keyword, setKeyword] = useState<string>("");
+  const [location, setLocation] = useState<string>("");
+
+  const handleSearch = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const params = new URLSearchParams();
+
+    if (keyword.trim()) {
+      params.append("search", keyword.trim());
+    }
+
+    if (location.trim()) {
+      params.append("location", location.trim());
+    }
+
+    router.push(params.toString() ? `/jobs?${params.toString()}` : "/jobs");
+  };
+
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-slate-50 text-slate-950 overflow-hidden">
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-blue-700 to-blue-500 text-white">
-        <div className="max-w-7xl mx-auto px-6 py-24 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <div className="mb-6">
-            <Image
-              src="/images/jobpilot-logo-full.png"
-              alt="JobPilot Logo"
-              width={260}
-              height={260}
-              priority
-              className="bg-white rounded-2xl p-4 shadow-lg"
-            />
-          </div>
-          <div>
-            <p className="uppercase tracking-widest text-blue-100 font-semibold mb-4">
-              Full Stack Smart Job Portal
-            </p>
+      <section className="relative min-h-[760px] flex items-center justify-center px-6">
+        <div className="absolute inset-0">
+          <Image
+            src="/images/hero-job.png"
+            alt="JobPilot hero background"
+            fill
+            priority
+            className="object-cover"
+          />
 
-            <h1 className="text-4xl md:text-6xl font-bold leading-tight mb-6">
-              Find Jobs Faster with Smart Skill Matching
-            </h1>
+          <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-white/40 via-white/40 to-slate-50" />
+        </div>
 
-            <p className="text-blue-100 text-lg mb-8 max-w-xl">
-              A modern job portal built with Next.js, Node.js, Express, and
-              MongoDB. Job seekers can apply for jobs, employers can manage job
-              posts, and admins can control the platform.
-            </p>
-
-            <div className="flex flex-wrap gap-4">
-              <Link
-                href="/jobs"
-                className="bg-white text-blue-700 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50"
-              >
-                Browse Jobs
-              </Link>
-
-              <Link
-                href="/register"
-                className="border border-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-blue-700"
-              >
-                Create Account
-              </Link>
+        <div className="relative z-10 max-w-6xl mx-auto text-center pt-16 animate-fade-up">
+          {/* Big Logo Fix */}
+          <div className="mb-8 flex justify-center">
+            <div className="w-56 h-56 md:w-64 md:h-64 rounded-[2rem] overflow-hidden bg-white shadow-2xl border border-slate-200 flex items-center justify-center hover:scale-105 transition duration-500">
+              <Image
+                src="/images/jobpilot-logo-full.png"
+                alt="JobPilot Logo"
+                width={256}
+                height={256}
+                priority
+                className="w-full h-full object-contain p-4"
+              />
             </div>
           </div>
 
-          <div className="bg-white/10 border border-white/20 rounded-2xl p-8 shadow-xl">
-            <h2 className="text-2xl font-bold mb-6">Project Highlights</h2>
-
-            <div className="space-y-4">
-              <div className="bg-white text-gray-800 p-4 rounded-xl">
-                <p className="font-semibold">Frontend</p>
-                <p className="text-gray-600">Next.js + TypeScript + Tailwind CSS</p>
-              </div>
-
-              <div className="bg-white text-gray-800 p-4 rounded-xl">
-                <p className="font-semibold">Backend</p>
-                <p className="text-gray-600">Node.js + Express.js REST APIs</p>
-              </div>
-
-              <div className="bg-white text-gray-800 p-4 rounded-xl">
-                <p className="font-semibold">Database</p>
-                <p className="text-gray-600">MongoDB + Mongoose Models</p>
-              </div>
-
-              <div className="bg-white text-gray-800 p-4 rounded-xl">
-                <p className="font-semibold">Security</p>
-                <p className="text-gray-600">JWT Authentication + Role-Based Access</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="max-w-7xl mx-auto px-6 -mt-10 relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white p-6 rounded-xl shadow text-center">
-            <p className="text-3xl font-bold text-blue-600">3</p>
-            <p className="text-gray-600 mt-1">User Roles</p>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow text-center">
-            <p className="text-3xl font-bold text-blue-600">CRUD</p>
-            <p className="text-gray-600 mt-1">Job Management</p>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow text-center">
-            <p className="text-3xl font-bold text-blue-600">JWT</p>
-            <p className="text-gray-600 mt-1">Authentication</p>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow text-center">
-            <p className="text-3xl font-bold text-blue-600">Smart</p>
-            <p className="text-gray-600 mt-1">Recommendations</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="max-w-7xl mx-auto px-6 py-20">
-        <div className="text-center mb-12">
-          <p className="text-blue-600 font-semibold mb-2">Main Features</p>
-          <h2 className="text-3xl md:text-4xl font-bold">
-            Built for Job Seekers, Employers, and Admins
-          </h2>
-          <p className="text-gray-600 mt-4 max-w-2xl mx-auto">
-            This project includes real-world full stack features that are useful
-            for a professional CV and portfolio.
+          <p className="uppercase tracking-widest text-blue-700 font-semibold mb-4">
+            JobPilot - Smart Job Portal
           </p>
+
+          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight mb-6">
+            Find Your Dream Career with{" "}
+            <span className="text-blue-600">JobPilot</span>
+          </h1>
+
+          <p className="text-slate-600 text-lg md:text-xl max-w-3xl mx-auto mb-10">
+            Navigate your professional future. Discover jobs, apply online,
+            track your applications, and get skill-based recommendations that
+            match your profile.
+          </p>
+
+          <form
+            onSubmit={handleSearch}
+            className="max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 animate-fade-up-delay"
+          >
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50">
+              <span className="text-slate-400">⌕</span>
+
+              <input
+                type="text"
+                placeholder="Job title, keywords, or company"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="w-full bg-transparent outline-none text-sm"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50">
+              <span className="text-slate-400">⌖</span>
+
+              <input
+                type="text"
+                placeholder="City, state, or remote"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full bg-transparent outline-none text-sm"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold hover:bg-blue-700 transition shadow-lg shadow-blue-600/25"
+            >
+              Find Jobs
+            </button>
+          </form>
+
+          <div className="flex flex-wrap justify-center gap-3 mt-6 text-sm animate-fade-up-delay-2">
+            <span className="text-slate-500">Popular:</span>
+
+            {["Software Engineer", "Product Manager", "Data Scientist"].map(
+              (tag) => (
+                <Link
+                  key={tag}
+                  href="/jobs"
+                  className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full hover:bg-blue-100 transition"
+                >
+                  {tag}
+                </Link>
+              )
+            )}
+          </div>
+
+          <div className="hidden lg:block absolute left-10 top-56 bg-white rounded-2xl shadow-xl p-4 border border-slate-100 animate-float">
+            <p className="text-sm text-slate-500">Profile Match</p>
+            <p className="text-2xl font-bold text-blue-600">92%</p>
+          </div>
+
+          <div className="hidden lg:block absolute right-8 top-64 bg-white rounded-2xl shadow-xl p-4 border border-slate-100 animate-float-delay">
+            <p className="text-sm text-slate-500">Application</p>
+            <p className="text-lg font-bold text-emerald-600">Shortlisted</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Featured Jobs */}
+      <section className="max-w-7xl mx-auto px-6 py-20">
+        <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-10">
+          <div>
+            <h2 className="text-3xl font-bold">Featured Jobs</h2>
+            <p className="text-slate-600 mt-2">
+              Top opportunities curated for you.
+            </p>
+          </div>
+
+          <Link href="/jobs" className="text-blue-600 font-semibold">
+            View All →
+          </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {features.map((feature) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {featuredJobs.map((job, index) => (
             <div
-              key={feature.title}
-              className="bg-white p-6 rounded-xl shadow hover:shadow-md transition"
+              key={job.id}
+              className="group bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 animate-card"
+              style={{ animationDelay: `${index * 120}ms` }}
             >
-              <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
-              <p className="text-gray-600">{feature.description}</p>
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center font-bold">
+                  {job.company.charAt(0)}
+                </div>
+
+                <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-medium">
+                  {job.type}
+                </span>
+              </div>
+
+              <h3 className="text-xl font-bold mb-1 group-hover:text-blue-600 transition">
+                {job.title}
+              </h3>
+
+              <p className="text-blue-600 text-sm mb-4">{job.company}</p>
+
+              <div className="text-sm text-slate-600 space-y-2 mb-4">
+                <p>⌖ {job.location}</p>
+                <p>💼 {job.salary}</p>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mb-5">
+                {job.skills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-full"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+
+              <div className="border-t pt-4 flex justify-between items-center">
+                <span className="text-xs text-slate-500">{job.posted}</span>
+
+                <Link
+                  href="/jobs"
+                  className="text-blue-600 text-sm font-semibold hover:text-blue-700"
+                >
+                  Apply Now
+                </Link>
+              </div>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* User Roles Section */}
-      <section className="bg-white py-20">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <p className="text-blue-600 font-semibold mb-2">User Roles</p>
-            <h2 className="text-3xl md:text-4xl font-bold">
-              Role-Based Access Control
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="border rounded-xl p-6 hover:shadow-md transition">
-              <h3 className="text-xl font-bold mb-3">Job Seeker</h3>
-              <p className="text-gray-600 mb-4">
-                Create profile, browse jobs, apply for jobs, view applications,
-                and get recommended jobs.
-              </p>
-              <Link href="/register" className="text-blue-600 font-semibold">
-                Register as Job Seeker
-              </Link>
-            </div>
-
-            <div className="border rounded-xl p-6 hover:shadow-md transition">
-              <h3 className="text-xl font-bold mb-3">Employer</h3>
-              <p className="text-gray-600 mb-4">
-                Post jobs, edit jobs, delete jobs, view applicants, and update
-                application status.
-              </p>
-              <Link href="/register" className="text-blue-600 font-semibold">
-                Register as Employer
-              </Link>
-            </div>
-
-            <div className="border rounded-xl p-6 hover:shadow-md transition">
-              <h3 className="text-xl font-bold mb-3">Admin</h3>
-              <p className="text-gray-600 mb-4">
-                Manage users, jobs, applications, and view system dashboard
-                statistics.
-              </p>
-              <Link href="/login" className="text-blue-600 font-semibold">
-                Admin Login
-              </Link>
-            </div>
-          </div>
         </div>
       </section>
 
       {/* How It Works */}
-      <section className="max-w-7xl mx-auto px-6 py-20">
-        <div className="text-center mb-12">
-          <p className="text-blue-600 font-semibold mb-2">How It Works</p>
-          <h2 className="text-3xl md:text-4xl font-bold">
-            Simple Job Application Flow
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {steps.map((step) => (
-            <div key={step.number} className="bg-white p-6 rounded-xl shadow">
-              <p className="text-blue-600 text-3xl font-bold mb-4">
-                {step.number}
-              </p>
-              <h3 className="text-xl font-bold mb-2">{step.title}</h3>
-              <p className="text-gray-600">{step.description}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* CV Project Section */}
-      <section className="bg-gray-900 text-white py-20">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-          <div>
-            <p className="text-blue-300 font-semibold mb-2">For CV Portfolio</p>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              A Strong Full Stack Project for Your Resume
+      <section className="bg-slate-100 py-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold">
+              Streamlined for Success
             </h2>
-            <p className="text-gray-300">
-              This project demonstrates frontend development, REST API
-              development, database modeling, authentication, authorization,
-              CRUD operations, and smart recommendation logic.
+            <p className="text-slate-600 mt-3">
+              Everything you need to apply, hire, and manage jobs smoothly.
             </p>
           </div>
 
-          <div className="bg-white text-gray-800 p-6 rounded-xl">
-            <h3 className="text-xl font-bold mb-4">CV Description</h3>
-            <p className="text-gray-600">
-              Developed a full stack Smart Job Portal using Next.js,
-              TypeScript, Node.js, Express.js, and MongoDB. Implemented
-              role-based authentication, job posting, job applications,
-              applicant management, admin dashboard, and skill-based job
-              recommendations.
-            </p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {[
+              {
+                title: "Create Your Profile",
+                text: "Build a profile with skills, education, experience, and CV links.",
+              },
+              {
+                title: "Get Smart Matches",
+                text: "Find recommended jobs based on your saved skills.",
+              },
+              {
+                title: "Apply and Track",
+                text: "Apply for jobs and track your application status.",
+              },
+            ].map((item, index) => (
+              <div
+                key={item.title}
+                className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition"
+              >
+                <div className="w-10 h-10 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold mb-5">
+                  {index + 1}
+                </div>
+
+                <h3 className="text-xl font-bold mb-3">{item.title}</h3>
+                <p className="text-slate-600">{item.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Image Cards */}
+      <section className="max-w-7xl mx-auto px-6 py-20">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="relative h-[360px] rounded-3xl overflow-hidden shadow-xl group">
+            <Image
+              src="/images/candidate.png"
+              alt="Candidate career growth"
+              fill
+              className="object-cover group-hover:scale-105 transition duration-700"
+            />
+
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+
+            <div className="absolute bottom-8 left-8 right-8 text-white">
+              <span className="bg-white/20 backdrop-blur px-3 py-1 rounded-full text-sm">
+                For Candidates
+              </span>
+
+              <h3 className="text-3xl font-bold mt-4">
+                Accelerate Your Career
+              </h3>
+
+              <p className="text-white/80 mt-2 mb-5">
+                Showcase your skills to top companies and land the role you
+                deserve.
+              </p>
+
+              <Link
+                href="/my-profile"
+                className="bg-blue-600 px-5 py-3 rounded-xl font-semibold hover:bg-blue-700 transition"
+              >
+                Build Profile
+              </Link>
+            </div>
+          </div>
+
+          <div className="relative h-[360px] rounded-3xl overflow-hidden shadow-xl group">
+            <Image
+              src="/images/employer.png"
+              alt="Employer hiring team"
+              fill
+              className="object-cover group-hover:scale-105 transition duration-700"
+            />
+
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+
+            <div className="absolute bottom-8 left-8 right-8 text-white">
+              <span className="bg-white/20 backdrop-blur px-3 py-1 rounded-full text-sm">
+                For Employers
+              </span>
+
+              <h3 className="text-3xl font-bold mt-4">Hire Top Talent</h3>
+
+              <p className="text-white/80 mt-2 mb-5">
+                Reach qualified candidates quickly and manage applicants from
+                one place.
+              </p>
+
+              <Link
+                href="/employer/add-job"
+                className="bg-white text-slate-900 px-5 py-3 rounded-xl font-semibold hover:bg-slate-100 transition"
+              >
+                Post a Job
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="max-w-7xl mx-auto px-6 py-20 text-center">
-        <h2 className="text-3xl md:text-4xl font-bold mb-4">
-          Start Exploring the Job Portal
-        </h2>
+      <section className="bg-slate-950 text-white py-24">
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <h2 className="text-4xl md:text-5xl font-extrabold mb-5">
+            Ready to Start Your Journey?
+          </h2>
 
-        <p className="text-gray-600 mb-8">
-          Browse jobs, create an account, and test the full project flow.
-        </p>
+          <p className="text-slate-300 text-lg mb-10">
+            Join professionals finding ideal roles every day with JobPilot.
+          </p>
 
-        <div className="flex justify-center gap-4 flex-wrap">
-          <Link
-            href="/jobs"
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700"
-          >
-            Browse Jobs
-          </Link>
+          <div className="flex flex-wrap justify-center gap-4">
+            <Link
+              href="/register"
+              className="bg-blue-600 px-8 py-4 rounded-xl font-semibold hover:bg-blue-700 transition"
+            >
+              Get Started Now
+            </Link>
 
-          <Link
-            href="/dashboard"
-            className="border border-blue-600 text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50"
-          >
-            Go to Dashboard
-          </Link>
+            <Link
+              href="/jobs"
+              className="border border-white/40 px-8 py-4 rounded-xl font-semibold hover:bg-white hover:text-slate-950 transition"
+            >
+              Browse Jobs First
+            </Link>
+          </div>
         </div>
       </section>
+
+      <footer className="bg-slate-950 border-t border-white/10 text-white py-10">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between gap-6">
+          <div>
+            <h3 className="text-2xl font-bold">JobPilot</h3>
+            <p className="text-slate-400 mt-2">
+              Navigate your professional future smarter.
+            </p>
+          </div>
+
+          <p className="text-slate-500 text-sm">
+            © 2026 JobPilot. Built with Next.js, TypeScript, Node.js, Express,
+            and MongoDB.
+          </p>
+        </div>
+      </footer>
+
+      <style jsx global>{`
+        @keyframes fadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes float {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-16px);
+          }
+        }
+
+        .animate-fade-up {
+          animation: fadeUp 0.8s ease-out both;
+        }
+
+        .animate-fade-up-delay {
+          animation: fadeUp 0.8s ease-out 0.2s both;
+        }
+
+        .animate-fade-up-delay-2 {
+          animation: fadeUp 0.8s ease-out 0.4s both;
+        }
+
+        .animate-card {
+          animation: fadeUp 0.7s ease-out both;
+        }
+
+        .animate-float {
+          animation: float 4s ease-in-out infinite;
+        }
+
+        .animate-float-delay {
+          animation: float 4s ease-in-out 1s infinite;
+        }
+      `}</style>
     </main>
   );
 }
