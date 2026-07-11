@@ -25,9 +25,40 @@ const applicationSchema = new mongoose.Schema(
       default: "",
     },
 
-    cvUrl: {
-      type: String,
-      default: "",
+    cv: {
+        fileId: {
+          type: mongoose.Schema.Types.ObjectId,
+          required: true,
+        },
+      
+        filename: {
+          type: String,
+          required: true,
+        },
+      
+        originalName: {
+          type: String,
+          required: true,
+        },
+      
+        contentType: {
+          type: String,
+          required: true,
+          enum: [
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ],
+        },
+      
+        size: {
+          type: Number,
+          required: true,
+        },
+      },
+      
+    extractedSkills: {
+        type: [String],
+        default: [],
     },
 
     status: {
