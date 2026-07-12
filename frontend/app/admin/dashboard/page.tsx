@@ -1,196 +1,162 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-
-type UserRole = "jobseeker" | "employer" | "admin";
-
-type LoggedUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-};
-
-type AdminStats = {
-  totalUsers: number;
-  totalJobSeekers: number;
-  totalEmployers: number;
-  totalAdmins: number;
-  totalJobs: number;
-  activeJobs: number;
-  totalApplications: number;
-};
-
-type DashboardResponse = {
-  success: boolean;
-  message?: string;
-  stats?: AdminStats;
-};
+import { buttonStyles } from "@/components/ui/Button";
+import ErrorState from "@/components/ui/ErrorState";
+import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StatCard from "@/components/ui/StatCard";
+import { useAppSession } from "@/hooks/useAppSession";
+import { apiRequest, isUnauthorizedError } from "@/lib/api";
+import type { AdminStatsResponse } from "@/lib/types";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const { loading: sessionLoading, token, user } = useAppSession({
+    required: true,
+    allowedRoles: ["admin"],
+  });
 
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [error, setError] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
+  const [stats, setStats] = useState<AdminStatsResponse["stats"] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchDashboardStats = async () => {
-      const token = localStorage.getItem("token");
-      const user: LoggedUser | null = JSON.parse(
-        localStorage.getItem("user") || "null"
-      );
+    if (sessionLoading || !token || !user) {
+      return;
+    }
 
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      if (user?.role !== "admin") {
-        router.push("/dashboard");
-        return;
-      }
+    const loadStats = async () => {
+      setLoading(true);
+      setError("");
 
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/admin/dashboard`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        const data = await apiRequest<AdminStatsResponse>("/admin/dashboard", {
+          token,
+        });
+        setStats(data.stats || null);
+      } catch (loadError) {
+        if (isUnauthorizedError(loadError)) {
+          router.push("/login");
+          return;
+        }
+
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load the admin dashboard."
         );
-
-        const data: DashboardResponse = await res.json();
-
-        if (!res.ok) {
-          setError(data.message || "Failed to fetch admin dashboard");
-          return;
-        }
-
-        if (!data.stats) {
-          setError("Invalid dashboard response");
-          return;
-        }
-
-        setStats(data.stats);
-      } catch {
-        setError("Something went wrong");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchDashboardStats();
-  }, [router]);
+    void loadStats();
+  }, [router, sessionLoading, token, user]);
 
-  if (loading) {
-    return <p className="p-6">Loading admin dashboard...</p>;
+  if (sessionLoading || loading) {
+    return (
+      <div className="page-shell">
+        <LoadingSkeleton className="h-10 w-72" />
+        <div className="mt-8 grid-auto-fit">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <LoadingSkeleton key={index} className="h-36 w-full rounded-[28px]" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-            <p className="text-gray-600 mt-1">
-              Manage users, jobs, and applications
-            </p>
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Admin Dashboard"
+        title="System overview and moderation tools"
+        description="Monitor platform activity, review account health, and move quickly into user, job, or application management."
+        actions={
+          <>
+            <Link
+              href="/admin/users"
+              className={buttonStyles({ variant: "outline", size: "md" })}
+            >
+              Manage Users
+            </Link>
+            <Link
+              href="/admin/jobs"
+              className={buttonStyles({ variant: "primary", size: "md" })}
+            >
+              Review Jobs
+            </Link>
+          </>
+        }
+      />
+
+      {error ? (
+        <div className="mt-8">
+          <ErrorState message={error} />
+        </div>
+      ) : null}
+
+      {stats ? (
+        <>
+          <div className="mt-8 grid-auto-fit">
+            <StatCard label="Total users" value={stats.totalUsers} />
+            <StatCard label="Jobseekers" value={stats.totalJobSeekers} />
+            <StatCard label="Employers" value={stats.totalEmployers} />
+            <StatCard label="Admins" value={stats.totalAdmins} />
+            <StatCard label="Total jobs" value={stats.totalJobs} />
+            <StatCard label="Active jobs" value={stats.activeJobs} />
+            <StatCard
+              label="Applications"
+              value={stats.totalApplications}
+              caption="Total submissions received across the platform."
+            />
           </div>
 
-          <Link href="/dashboard" className="text-blue-600">
-            Main Dashboard
-          </Link>
-        </div>
+          <div className="mt-8 grid gap-6 lg:grid-cols-3">
+            <Link
+              href="/admin/users"
+              className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+            >
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                User management
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Search by name, filter by role, activate or deactivate accounts,
+                and delete users when necessary.
+              </p>
+            </Link>
 
-        {error && (
-          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">
-            {error}
-          </p>
-        )}
+            <Link
+              href="/admin/jobs"
+              className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+            >
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                Job moderation
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Review all listings, inspect employer details, and remove roles
+                that should no longer be visible.
+              </p>
+            </Link>
 
-        {stats && (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-gray-600">Total Users</h2>
-                <p className="text-3xl font-bold mt-2">{stats.totalUsers}</p>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-gray-600">Job Seekers</h2>
-                <p className="text-3xl font-bold mt-2">
-                  {stats.totalJobSeekers}
-                </p>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-gray-600">Employers</h2>
-                <p className="text-3xl font-bold mt-2">
-                  {stats.totalEmployers}
-                </p>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-gray-600">Admins</h2>
-                <p className="text-3xl font-bold mt-2">{stats.totalAdmins}</p>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-gray-600">Total Jobs</h2>
-                <p className="text-3xl font-bold mt-2">{stats.totalJobs}</p>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-gray-600">Active Jobs</h2>
-                <p className="text-3xl font-bold mt-2">{stats.activeJobs}</p>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-gray-600">Applications</h2>
-                <p className="text-3xl font-bold mt-2">
-                  {stats.totalApplications}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Link
-                href="/admin/users"
-                className="bg-white p-6 rounded-lg shadow hover:shadow-md"
-              >
-                <h2 className="text-xl font-bold mb-2">Manage Users</h2>
-                <p className="text-gray-600">
-                  View, activate, deactivate, or delete users.
-                </p>
-              </Link>
-
-              <Link
-                href="/admin/jobs"
-                className="bg-white p-6 rounded-lg shadow hover:shadow-md"
-              >
-                <h2 className="text-xl font-bold mb-2">Manage Jobs</h2>
-                <p className="text-gray-600">
-                  View and remove invalid job posts.
-                </p>
-              </Link>
-
-              <Link
-                href="/admin/applications"
-                className="bg-white p-6 rounded-lg shadow hover:shadow-md"
-              >
-                <h2 className="text-xl font-bold mb-2">Manage Applications</h2>
-                <p className="text-gray-600">
-                  View all job applications in the system.
-                </p>
-              </Link>
-            </div>
-          </>
-        )}
-      </div>
+            <Link
+              href="/admin/applications"
+              className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+            >
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                Application oversight
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Inspect platform-wide submissions, extracted skills, and secure
+                CV downloads through admin access.
+              </p>
+            </Link>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

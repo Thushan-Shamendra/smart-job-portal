@@ -91,9 +91,30 @@ const profileSchema = new mongoose.Schema(
       default: [],
     },
 
-    cvUrl: {
-      type: String,
-      default: "",
+    cv: {
+      fileId: {
+        type: mongoose.Schema.Types.ObjectId,
+      },
+
+      filename: {
+        type: String,
+      },
+
+      originalName: {
+        type: String,
+      },
+
+      contentType: {
+        type: String,
+        enum: [
+          "application/pdf",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ],
+      },
+
+      size: {
+        type: Number,
+      },
     },
 
     portfolioUrl: {

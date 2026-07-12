@@ -1,238 +1,232 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-
-type UserRole = "jobseeker" | "employer" | "admin";
-
-type LoggedUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-};
-
-type Job = {
-  _id: string;
-  title: string;
-  company: string;
-  location: string;
-  jobType: string;
-  salary: string;
-  category: string;
-  skills?: string[];
-};
-
-type RecommendedJob = {
-  job: Job;
-  matchedSkills: string[];
-  matchPercentage: number;
-};
-
-type RecommendedJobsResponse = {
-  success: boolean;
-  message?: string;
-  recommendedJobs: RecommendedJob[];
-};
+import JobCard from "@/components/jobs/JobCard";
+import { buttonStyles } from "@/components/ui/Button";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
+import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import SkillBadge from "@/components/ui/SkillBadge";
+import StatCard from "@/components/ui/StatCard";
+import { useAppSession } from "@/hooks/useAppSession";
+import { apiRequest, isUnauthorizedError } from "@/lib/api";
+import type { RecommendedJob, RecommendedJobsResponse } from "@/lib/types";
 
 export default function RecommendedJobsPage() {
   const router = useRouter();
+  const { loading: sessionLoading, token, user } = useAppSession({
+    required: true,
+    allowedRoles: ["jobseeker"],
+  });
 
   const [recommendedJobs, setRecommendedJobs] = useState<RecommendedJob[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchRecommendedJobs = async () => {
-      const token = localStorage.getItem("token");
-      const user: LoggedUser | null = JSON.parse(
-        localStorage.getItem("user") || "null"
-      );
+    if (sessionLoading || !token || !user) {
+      return;
+    }
 
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      if (user?.role !== "jobseeker") {
-        router.push("/dashboard");
-        return;
-      }
+    const loadRecommendations = async () => {
+      setLoading(true);
+      setError("");
 
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/jobs/recommended`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        const data = await apiRequest<RecommendedJobsResponse>(
+          "/jobs/recommended",
+          { token }
         );
-
-        const data: RecommendedJobsResponse = await res.json();
-
-        if (!res.ok) {
-          setError(data.message || "Failed to fetch recommended jobs");
+        setRecommendedJobs(data.recommendedJobs);
+      } catch (loadError) {
+        if (isUnauthorizedError(loadError)) {
+          router.push("/login");
           return;
         }
 
-        setRecommendedJobs(data.recommendedJobs);
-      } catch {
-        setError("Something went wrong");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load recommended jobs."
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRecommendedJobs();
-  }, [router]);
+    void loadRecommendations();
+  }, [router, sessionLoading, token, user]);
 
-  if (loading) {
-    return <p className="p-6">Loading recommended jobs...</p>;
+  const highestMatch = recommendedJobs[0]?.matchPercentage || 0;
+
+  if (sessionLoading || loading) {
+    return (
+      <div className="page-shell">
+        <LoadingSkeleton className="h-10 w-72" />
+        <div className="mt-8 grid-auto-fit">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <LoadingSkeleton key={index} className="h-36 w-full rounded-[28px]" />
+          ))}
+        </div>
+        <div className="mt-8 space-y-6">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <LoadingSkeleton key={index} className="h-80 w-full rounded-[32px]" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Recommended Jobs</h1>
-
-          <div className="flex gap-4">
-            <Link href="/my-profile" className="text-green-600">
-              My Profile
-            </Link>
-
-            <Link href="/dashboard" className="text-blue-600">
-              Dashboard
-            </Link>
-          </div>
-        </div>
-
-        {error && (
-          <div className="bg-red-100 text-red-700 p-4 rounded mb-4">
-            <p>{error}</p>
-
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Recommended Jobs"
+        title="Skill-based matches from your saved profile"
+        description="See opportunities ranked by how closely they align with the skills and experience on your profile."
+        actions={
+          <>
             <Link
               href="/my-profile"
-              className="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              className={buttonStyles({ variant: "outline", size: "md" })}
             >
               Update Profile
             </Link>
-          </div>
-        )}
+            <Link
+              href="/jobs"
+              className={buttonStyles({ variant: "primary", size: "md" })}
+            >
+              Browse All Jobs
+            </Link>
+          </>
+        }
+      />
 
-        {!error && recommendedJobs.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow">
-            <p>No recommended jobs found.</p>
-
-            <p className="text-gray-600 mt-2">
-              Add more skills to your profile or browse all jobs.
-            </p>
-
-            <div className="flex gap-3 mt-4">
+      {error ? (
+        <div className="mt-8">
+          <ErrorState
+            message={error}
+            action={
               <Link
                 href="/my-profile"
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                className={buttonStyles({ variant: "primary", size: "md" })}
               >
-                Update Profile
+                Review My Profile
               </Link>
+            }
+          />
+        </div>
+      ) : null}
 
-              <Link
-                href="/jobs"
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-              >
-                Browse Jobs
-              </Link>
-            </div>
+      {!error && (
+        <>
+          <div className="mt-8 grid-auto-fit">
+            <StatCard
+              label="Recommended roles"
+              value={recommendedJobs.length}
+              caption="Active jobs that share at least one profile skill."
+            />
+            <StatCard
+              label="Best match"
+              value={`${highestMatch}%`}
+              caption="Your strongest match right now."
+            />
+            <StatCard
+              label="Ready to apply"
+              value={recommendedJobs.filter((item) => item.matchPercentage >= 50).length}
+              caption="Matches at 50% or above."
+            />
           </div>
-        ) : (
-          !error && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {recommendedJobs.map((item) => (
+
+          <div className="mt-8 space-y-6">
+            {recommendedJobs.length === 0 ? (
+              <EmptyState
+                title="No recommendations yet"
+                description="Add more skills to your profile and JobPilot will start surfacing stronger matches."
+                action={
+                  <Link
+                    href="/my-profile"
+                    className={buttonStyles({ variant: "primary", size: "md" })}
+                  >
+                    Improve My Profile
+                  </Link>
+                }
+              />
+            ) : (
+              recommendedJobs.map((item) => (
                 <div
                   key={item.job._id}
-                  className="bg-white p-6 rounded-lg shadow"
+                  className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm"
                 >
-                  <div className="flex justify-between items-start mb-3">
-                    <h2 className="text-xl font-bold">{item.job.title}</h2>
+                  <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                        {item.job.title}
+                      </h2>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {item.job.company} - {item.job.location}
+                      </p>
+                    </div>
 
-                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded text-sm font-semibold">
+                    <div className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">
                       {item.matchPercentage}% Match
-                    </span>
-                  </div>
-
-                  <p className="text-gray-700 mb-1">
-                    <strong>Company:</strong> {item.job.company}
-                  </p>
-
-                  <p className="text-gray-700 mb-1">
-                    <strong>Location:</strong> {item.job.location}
-                  </p>
-
-                  <p className="text-gray-700 mb-1">
-                    <strong>Job Type:</strong> {item.job.jobType}
-                  </p>
-
-                  <p className="text-gray-700 mb-1">
-                    <strong>Salary:</strong> {item.job.salary}
-                  </p>
-
-                  <p className="text-gray-700 mb-3">
-                    <strong>Category:</strong> {item.job.category}
-                  </p>
-
-                  <div className="mb-4">
-                    <p className="font-semibold mb-2">Matched Skills:</p>
-
-                    <div className="flex flex-wrap gap-2">
-                      {item.matchedSkills.map((skill, index) => (
-                        <span
-                          key={index}
-                          className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm"
-                        >
-                          {skill}
-                        </span>
-                      ))}
                     </div>
                   </div>
 
-                  <div className="mb-4">
-                    <p className="font-semibold mb-2">Required Skills:</p>
+                  <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+                    <JobCard
+                      job={item.job}
+                      userRole={user?.role}
+                      className="p-5 shadow-none"
+                    />
 
-                    <div className="flex flex-wrap gap-2">
-                      {item.job.skills?.map((skill, index) => (
-                        <span
-                          key={index}
-                          className="bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm"
-                        >
-                          {skill}
-                        </span>
-                      ))}
+                    <div className="rounded-[28px] bg-slate-50 p-5">
+                      <h3 className="text-lg font-semibold text-slate-950">
+                        Matched skills
+                      </h3>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {item.matchedSkills.length > 0 ? (
+                          item.matchedSkills.map((skill) => (
+                            <SkillBadge
+                              key={`${item.job._id}-${skill}`}
+                              label={skill}
+                            />
+                          ))
+                        ) : (
+                          <p className="text-sm text-slate-600">
+                            No direct skill matches were returned.
+                          </p>
+                        )}
+                      </div>
+
+                      <h3 className="mt-6 text-lg font-semibold text-slate-950">
+                        Required skills
+                      </h3>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {item.job.skills && item.job.skills.length > 0 ? (
+                          item.job.skills.map((skill) => (
+                            <SkillBadge
+                              key={`${item.job._id}-required-${skill}`}
+                              label={skill}
+                              muted={!item.matchedSkills.includes(skill)}
+                            />
+                          ))
+                        ) : (
+                          <p className="text-sm text-slate-600">
+                            No skills were listed for this role.
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <Link
-                      href={`/jobs/${item.job._id}`}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                    >
-                      View Details
-                    </Link>
-
-                    <Link
-                      href={`/apply/${item.job._id}`}
-                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-                    >
-                      Apply Now
-                    </Link>
                   </div>
                 </div>
-              ))}
-            </div>
-          )
-        )}
-      </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

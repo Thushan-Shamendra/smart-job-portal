@@ -1,282 +1,298 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
+import InputField from "@/components/ui/InputField";
+import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import SelectField from "@/components/ui/SelectField";
+import StatusBadge from "@/components/ui/StatusBadge";
+import { useAppSession } from "@/hooks/useAppSession";
+import { apiRequest, isUnauthorizedError } from "@/lib/api";
+import type { UserRole, UsersResponse, UserSummary } from "@/lib/types";
+import { formatDate } from "@/lib/utils";
 
-type UserRole = "jobseeker" | "employer" | "admin";
-
-type LoggedUser = {
-  id: string;
-  name: string;
-  email: string;
+type UserRow = UserSummary & {
   role: UserRole;
-};
-
-type User = {
-  _id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  phone?: string;
   isActive: boolean;
   createdAt: string;
 };
 
-type UsersResponse = {
-  success: boolean;
-  message?: string;
-  users: User[];
-};
-
-type StatusResponse = {
-  success: boolean;
-  message?: string;
-  user?: User;
-};
-
-type DeleteResponse = {
-  success: boolean;
-  message?: string;
-};
+type PendingAction =
+  | { type: "toggle"; user: UserRow }
+  | { type: "delete"; user: UserRow }
+  | null;
 
 export default function AdminUsersPage() {
   const router = useRouter();
+  const { loading: sessionLoading, token, user } = useAppSession({
+    required: true,
+    allowedRoles: ["admin"],
+  });
 
-  const [users, setUsers] = useState<User[]>([]);
-  const [error, setError] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      const token = localStorage.getItem("token");
-      const loggedUser: LoggedUser | null = JSON.parse(
-        localStorage.getItem("user") || "null"
-      );
+    if (sessionLoading || !token || !user) {
+      return;
+    }
 
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      if (loggedUser?.role !== "admin") {
-        router.push("/dashboard");
-        return;
-      }
+    const loadUsers = async () => {
+      setLoading(true);
+      setError("");
 
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data: UsersResponse = await res.json();
-
-        if (!res.ok) {
-          setError(data.message || "Failed to fetch users");
+        const data = await apiRequest<UsersResponse>("/admin/users", { token });
+        setUsers(data.users as UserRow[]);
+      } catch (loadError) {
+        if (isUnauthorizedError(loadError)) {
+          router.push("/login");
           return;
         }
 
-        setUsers(data.users);
-      } catch {
-        setError("Something went wrong");
+        setError(
+          loadError instanceof Error ? loadError.message : "Unable to load users."
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUsers();
-  }, [router]);
+    void loadUsers();
+  }, [router, sessionLoading, token, user]);
 
-  const handleStatusChange = async (userId: string, currentStatus: boolean) => {
-    const token = localStorage.getItem("token");
+  const filteredUsers = useMemo(
+    () =>
+      users.filter((item) => {
+        const matchesSearch =
+          item.name.toLowerCase().includes(search.toLowerCase()) ||
+          item.email.toLowerCase().includes(search.toLowerCase());
+        const matchesRole = roleFilter ? item.role === roleFilter : true;
+        return matchesSearch && matchesRole;
+      }),
+    [roleFilter, search, users]
+  );
 
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}/status`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            isActive: !currentStatus,
-          }),
-        }
-      );
-
-      const data: StatusResponse = await res.json();
-
-      if (!res.ok) {
-        alert(data.message || "Failed to update user status");
-        return;
-      }
-
-      setUsers((prevUsers) =>
-        prevUsers.map((user) =>
-          user._id === userId
-            ? { ...user, isActive: !currentStatus }
-            : user
-        )
-      );
-
-      alert(data.message || "User status updated successfully");
-    } catch {
-      alert("Something went wrong");
-    }
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    const confirmDelete = confirm("Are you sure you want to delete this user?");
-
-    if (!confirmDelete) {
+  const confirmAction = async () => {
+    if (!token || !pendingAction) {
       return;
     }
 
-    const token = localStorage.getItem("token");
+    setProcessing(true);
+    setError("");
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}`,
-        {
-          method: "DELETE",
+      if (pendingAction.type === "toggle") {
+        const nextStatus = !pendingAction.user.isActive;
+
+        await apiRequest(`/admin/users/${pendingAction.user._id}/status`, {
+          method: "PUT",
+          token,
           headers: {
-            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
-        }
-      );
+          body: JSON.stringify({
+            isActive: nextStatus,
+          }),
+        });
 
-      const data: DeleteResponse = await res.json();
+        setUsers((current) =>
+          current.map((item) =>
+            item._id === pendingAction.user._id
+              ? { ...item, isActive: nextStatus }
+              : item
+          )
+        );
+      }
 
-      if (!res.ok) {
-        alert(data.message || "Failed to delete user");
+      if (pendingAction.type === "delete") {
+        await apiRequest(`/admin/users/${pendingAction.user._id}`, {
+          method: "DELETE",
+          token,
+        });
+
+        setUsers((current) =>
+          current.filter((item) => item._id !== pendingAction.user._id)
+        );
+      }
+
+      setPendingAction(null);
+    } catch (actionError) {
+      if (isUnauthorizedError(actionError)) {
+        router.push("/login");
         return;
       }
 
-      setUsers((prevUsers) => prevUsers.filter((user) => user._id !== userId));
-
-      alert(data.message || "User deleted successfully");
-    } catch {
-      alert("Something went wrong");
+      setError(
+        actionError instanceof Error
+          ? actionError.message
+          : "Unable to complete this admin action."
+      );
+    } finally {
+      setProcessing(false);
     }
   };
 
-  if (loading) {
-    return <p className="p-6">Loading users...</p>;
+  if (sessionLoading || loading) {
+    return (
+      <div className="page-shell">
+        <LoadingSkeleton className="h-10 w-72" />
+        <LoadingSkeleton className="mt-8 h-24 w-full rounded-[28px]" />
+        <div className="mt-8 space-y-5">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <LoadingSkeleton key={index} className="h-40 w-full rounded-[28px]" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Manage Users</h1>
-            <p className="text-gray-600 mt-1">
-              View, activate, deactivate, or delete users.
-            </p>
-          </div>
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Admin"
+        title="Manage platform users"
+        description="Search accounts, filter by role, and manage access across the platform."
+        />
 
-          <div className="flex gap-4">
-            <Link href="/admin/dashboard" className="text-purple-600">
-              Admin Dashboard
-            </Link>
-
-            <Link href="/dashboard" className="text-blue-600">
-              Main Dashboard
-            </Link>
-          </div>
+      <div className="mt-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
+          <InputField
+            label="Search users"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or email"
+          />
+          <SelectField
+            label="Filter by role"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
+            <option value="">All roles</option>
+            <option value="jobseeker">Jobseeker</option>
+            <option value="employer">Employer</option>
+            <option value="admin">Admin</option>
+          </SelectField>
         </div>
+      </div>
 
-        {error && (
-          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">
-            {error}
-          </p>
-        )}
+      {error ? (
+        <div className="mt-8">
+          <ErrorState message={error} />
+        </div>
+      ) : null}
 
-        {users.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow">
-            <p>No users found.</p>
-          </div>
+      <div className="mt-8 space-y-5">
+        {filteredUsers.length === 0 ? (
+          <EmptyState
+            title="No users match your filters"
+            description="Try broadening the search or clearing the role filter."
+          />
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-200 text-left">
-                  <th className="p-4">Name</th>
-                  <th className="p-4">Email</th>
-                  <th className="p-4">Role</th>
-                  <th className="p-4">Phone</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4">Created</th>
-                  <th className="p-4">Actions</th>
-                </tr>
-              </thead>
+          filteredUsers.map((item) => (
+            <article
+              key={item._id}
+              className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm"
+            >
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                    {item.name}
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-600">{item.email}</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {item.phone && item.phone.trim() !== ""
+                      ? item.phone
+                      : "Phone not provided"}
+                  </p>
+                </div>
 
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user._id} className="border-t">
-                    <td className="p-4 font-medium">{user.name}</td>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 capitalize">
+                    {item.role}
+                  </span>
+                  <StatusBadge status={item.isActive ? "Active" : "Inactive"} />
+                </div>
+              </div>
 
-                    <td className="p-4">{user.email}</td>
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <div className="rounded-[22px] bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-500">Created</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">
+                    {formatDate(item.createdAt)}
+                  </p>
+                </div>
+                <div className="rounded-[22px] bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-500">User ID</p>
+                  <p className="mt-2 break-all text-sm font-semibold text-slate-900">
+                    {item._id}
+                  </p>
+                </div>
+              </div>
 
-                    <td className="p-4 capitalize">{user.role}</td>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPendingAction({ type: "toggle", user: item })}
+                  className={
+                    item.isActive
+                      ? "inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-600"
+                      : "inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                  }
+                >
+                  {item.isActive ? "Deactivate User" : "Activate User"}
+                </button>
 
-                    <td className="p-4">
-                      {user.phone && user.phone.trim() !== ""
-                        ? user.phone
-                        : "Not provided"}
-                    </td>
-
-                    <td className="p-4">
-                      <span
-                        className={`px-3 py-1 rounded text-sm font-semibold ${
-                          user.isActive
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        }`}
-                      >
-                        {user.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-
-                    <td className="p-4">
-                      {new Date(user.createdAt).toLocaleDateString()}
-                    </td>
-
-                    <td className="p-4">
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleStatusChange(user._id, user.isActive)
-                          }
-                          className={`px-3 py-2 rounded text-white text-sm ${
-                            user.isActive
-                              ? "bg-yellow-600 hover:bg-yellow-700"
-                              : "bg-green-600 hover:bg-green-700"
-                          }`}
-                        >
-                          {user.isActive ? "Deactivate" : "Activate"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteUser(user._id)}
-                          className="px-3 py-2 rounded bg-red-600 text-white text-sm hover:bg-red-700"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                <button
+                  type="button"
+                  onClick={() => setPendingAction({ type: "delete", user: item })}
+                  className="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700"
+                >
+                  Delete User
+                </button>
+              </div>
+            </article>
+          ))
         )}
       </div>
+
+      <ConfirmationModal
+        open={Boolean(pendingAction)}
+        title={
+          pendingAction?.type === "delete"
+            ? "Delete this user?"
+            : pendingAction?.user.isActive
+            ? "Deactivate this user?"
+            : "Activate this user?"
+        }
+        description={
+          pendingAction?.type === "delete"
+            ? `This will permanently remove ${pendingAction.user.name}'s account.`
+            : pendingAction?.user.isActive
+            ? `This will block ${pendingAction.user.name} from signing in until the account is reactivated.`
+            : `This will allow ${pendingAction?.user.name} to sign in again.`
+        }
+        confirmLabel={
+          pendingAction?.type === "delete"
+            ? "Delete User"
+            : pendingAction?.user.isActive
+            ? "Deactivate User"
+            : "Activate User"
+        }
+        tone={pendingAction?.type === "delete" ? "danger" : "primary"}
+        busy={processing}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={confirmAction}
+      />
     </div>
   );
 }

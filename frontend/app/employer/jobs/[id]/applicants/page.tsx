@@ -1,170 +1,127 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent } from "react";
-import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, type ChangeEvent } from "react";
+import { useParams } from "next/navigation";
+import Button, { buttonStyles } from "@/components/ui/Button";
+import ErrorState from "@/components/ui/ErrorState";
+import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import SkillBadge from "@/components/ui/SkillBadge";
+import StatusBadge from "@/components/ui/StatusBadge";
+import { useAppSession } from "@/hooks/useAppSession";
+import { apiRequest, isUnauthorizedError } from "@/lib/api";
 import { downloadApplicationCV } from "@/lib/downloadApplicationCV";
+import type {
+  ApplicationStatus,
+  ApplicationsResponse,
+  JobApplication,
+} from "@/lib/types";
 
-type UserRole = "jobseeker" | "employer" | "admin";
-
-type LoggedUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-};
-
-type ApplicationStatus =
-  | "Pending"
-  | "Reviewed"
-  | "Shortlisted"
-  | "Rejected"
-  | "Accepted";
-
-type Applicant = {
-  _id: string;
-  name: string;
-  email: string;
-  phone?: string;
-};
-
-type Job = {
-  _id: string;
-  title: string;
-  company?: string;
-  location?: string;
-  jobType?: string;
-};
-
-type JobApplication = {
-  _id: string;
-  job?: Job;
-  applicant?: Applicant;
-  coverLetter?: string;
-  cv?: {
-    originalName?: string;
-    filename?: string;
-    contentType?: string;
-    size?: number;
-  };
-  extractedSkills?: string[];
-  status: ApplicationStatus;
-  createdAt: string;
-};
-
-type ApplicationsResponse = {
-  success: boolean;
-  message?: string;
-  applications: JobApplication[];
-};
-
-type StatusUpdateResponse = {
-  success: boolean;
-  message?: string;
-  application?: JobApplication;
-};
+const applicationStatuses: ApplicationStatus[] = [
+  "Pending",
+  "Reviewed",
+  "Shortlisted",
+  "Rejected",
+  "Accepted",
+];
 
 export default function ApplicantsPage() {
   const params = useParams();
   const router = useRouter();
+  const { loading: sessionLoading, token, user } = useAppSession({
+    required: true,
+    allowedRoles: ["employer"],
+  });
 
-  const id = params.id as string;
+  const jobId = params.id as string;
 
   const [applications, setApplications] = useState<JobApplication[]>([]);
-  const [jobTitle, setJobTitle] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>("");
-  const [downloadError, setDownloadError] = useState<string>("");
-  const [downloadingId, setDownloadingId] = useState<string>("");
+  const [jobTitle, setJobTitle] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [downloadError, setDownloadError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [downloadingId, setDownloadingId] = useState("");
 
   useEffect(() => {
-    const fetchApplicants = async () => {
-      const token = localStorage.getItem("token");
-      const user: LoggedUser | null = JSON.parse(
-        localStorage.getItem("user") || "null"
-      );
+    if (sessionLoading || !token || !user) {
+      return;
+    }
 
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      if (user?.role !== "employer") {
-        router.push("/dashboard");
-        return;
-      }
+    const loadApplicants = async () => {
+      setLoading(true);
+      setError("");
 
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/applications/job/${id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        const data = await apiRequest<ApplicationsResponse>(
+          `/applications/job/${jobId}`,
+          { token }
         );
 
-        const data: ApplicationsResponse = await res.json();
-
-        if (!res.ok) {
-          setError(data.message || "Failed to fetch applicants");
+        setApplications(data.applications);
+        setJobTitle(data.applications[0]?.job?.title || "");
+      } catch (loadError) {
+        if (isUnauthorizedError(loadError)) {
+          router.push("/login");
           return;
         }
 
-        setApplications(data.applications);
-
-        if (data.applications.length > 0) {
-          setJobTitle(data.applications[0].job?.title || "");
-        }
-      } catch {
-        setError("Something went wrong");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load applicants."
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    fetchApplicants();
-  }, [id, router]);
+    void loadApplicants();
+  }, [jobId, router, sessionLoading, token, user]);
 
   const handleStatusChange = async (
     applicationId: string,
     newStatus: ApplicationStatus
   ) => {
-    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    setStatusMessage("");
+    setError("");
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/applications/${applicationId}/status`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            status: newStatus,
-          }),
-        }
-      );
+      await apiRequest(`/applications/${applicationId}/status`, {
+        method: "PUT",
+        token,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-      const data: StatusUpdateResponse = await res.json();
-
-      if (!res.ok) {
-        alert(data.message || "Failed to update status");
-        return;
-      }
-
-      setApplications((prevApplications) =>
-        prevApplications.map((application) =>
+      setApplications((current) =>
+        current.map((application) =>
           application._id === applicationId
             ? { ...application, status: newStatus }
             : application
         )
       );
+      setStatusMessage("Application status updated successfully.");
+    } catch (statusError) {
+      if (isUnauthorizedError(statusError)) {
+        router.push("/login");
+        return;
+      }
 
-      alert("Application status updated successfully");
-    } catch {
-      alert("Something went wrong");
+      setError(
+        statusError instanceof Error
+          ? statusError.message
+          : "Unable to update the application status."
+      );
     }
   };
 
@@ -172,15 +129,13 @@ export default function ApplicantsPage() {
     e: ChangeEvent<HTMLSelectElement>,
     applicationId: string
   ) => {
-    handleStatusChange(applicationId, e.target.value as ApplicationStatus);
+    void handleStatusChange(applicationId, e.target.value as ApplicationStatus);
   };
 
   const handleDownloadCV = async (
     applicationId: string,
     originalName?: string
   ) => {
-    const token = localStorage.getItem("token");
-
     if (!token) {
       router.push("/login");
       return;
@@ -199,154 +154,154 @@ export default function ApplicantsPage() {
       setDownloadError(
         downloadFailure instanceof Error
           ? downloadFailure.message
-          : "Something went wrong while downloading the CV."
+          : "Unable to download the CV."
       );
     } finally {
       setDownloadingId("");
     }
   };
 
-  if (loading) {
-    return <p className="p-6">Loading applicants...</p>;
+  if (sessionLoading || loading) {
+    return (
+      <div className="page-shell">
+        <LoadingSkeleton className="h-10 w-72" />
+        <div className="mt-8 space-y-6">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <LoadingSkeleton key={index} className="h-80 w-full rounded-[32px]" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Job Applicants</h1>
-            {jobTitle && <p className="text-gray-600 mt-1">{jobTitle}</p>}
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Employer"
+        title={jobTitle ? `Applicants for ${jobTitle}` : "Applicants"}
+        description="Review cover letters, explore extracted skills, and keep every candidate moving through the hiring pipeline."
+        actions={
+          <Link
+            href="/employer/my-jobs"
+            className={buttonStyles({ variant: "outline", size: "md" })}
+          >
+            Back to My Jobs
+          </Link>
+        }
+      />
+
+      <div className="mt-8 space-y-4">
+        {statusMessage ? (
+          <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+            {statusMessage}
           </div>
+        ) : null}
+        {error ? <ErrorState message={error} /> : null}
+        {downloadError ? (
+          <ErrorState title="Download failed" message={downloadError} />
+        ) : null}
+      </div>
 
-          <div className="flex gap-4">
-            <Link href="/employer/my-jobs" className="text-blue-600">
-              My Jobs
-            </Link>
-
-            <Link href="/dashboard" className="text-green-600">
-              Dashboard
-            </Link>
-          </div>
-        </div>
-
-        {error && (
-          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</p>
-        )}
-
-        {downloadError && (
-          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">
-            {downloadError}
-          </p>
-        )}
-
+      <div className="mt-8 space-y-6">
         {applications.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow">
-            <p>No applicants for this job yet.</p>
+          <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+            <p className="text-sm text-slate-600">
+              No applicants have submitted to this role yet.
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {applications.map((application) => (
-              <div
-                key={application._id}
-                className="bg-white p-6 rounded-lg shadow"
-              >
-                <div className="flex justify-between items-start gap-4">
-                  <div>
-                    <h2 className="text-xl font-bold mb-2">
-                      {application.applicant?.name}
-                    </h2>
-
-                    <p className="text-gray-700 mb-1">
-                      <strong>Email:</strong> {application.applicant?.email}
-                    </p>
-
-                    <p className="text-gray-700 mb-1">
-                      <strong>Phone:</strong>{" "}
-                      {application.applicant?.phone || "Not provided"}
-                    </p>
-
-                    <p className="text-gray-700 mb-1">
-                      <strong>Applied Date:</strong>{" "}
-                      {new Date(application.createdAt).toLocaleDateString()}
-                    </p>
-
-                    <p className="text-gray-700 mb-4">
-                      <strong>Status:</strong>{" "}
-                      <span className="font-semibold text-blue-600">
-                        {application.status}
-                      </span>
-                    </p>
-                  </div>
-
-                  <select
-                    value={application.status}
-                    onChange={(e) => handleSelectChange(e, application._id)}
-                    className="border p-2 rounded"
-                  >
-                    <option value="Pending">Pending</option>
-                    <option value="Reviewed">Reviewed</option>
-                    <option value="Shortlisted">Shortlisted</option>
-                    <option value="Rejected">Rejected</option>
-                    <option value="Accepted">Accepted</option>
-                  </select>
-                </div>
-
-                <div className="mt-4">
-                  <h3 className="font-semibold mb-2">Cover Letter</h3>
-                  <p className="text-gray-700 bg-gray-50 p-4 rounded">
-                    {application.coverLetter || "No cover letter provided"}
+          applications.map((application) => (
+            <article
+              key={application._id}
+              className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm"
+            >
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                    {application.applicant?.name || "Candidate"}
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {application.applicant?.email || "Email unavailable"}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {application.applicant?.phone || "Phone not provided"}
                   </p>
                 </div>
 
-                <div className="mt-4">
-                  <h3 className="font-semibold mb-2">Extracted Skills</h3>
+                <div className="flex flex-col gap-3">
+                  <StatusBadge status={application.status} />
+                  <select
+                    value={application.status}
+                    onChange={(e) => handleSelectChange(e, application._id)}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                  >
+                    {applicationStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
+              <div className="mt-6 rounded-[24px] bg-slate-50 p-5">
+                <h3 className="text-lg font-semibold text-slate-950">
+                  Cover Letter
+                </h3>
+                <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-700">
+                  {application.coverLetter || "No cover letter provided."}
+                </p>
+              </div>
+
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-slate-950">
+                  Extracted Skills
+                </h3>
+                <div className="mt-3 flex flex-wrap gap-2">
                   {application.extractedSkills &&
                   application.extractedSkills.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {application.extractedSkills.map((skill) => (
-                        <span
-                          key={`${application._id}-${skill}`}
-                          className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
+                    application.extractedSkills.map((skill) => (
+                      <SkillBadge
+                        key={`${application._id}-${skill}`}
+                        label={skill}
+                      />
+                    ))
                   ) : (
-                    <p className="text-gray-600">No extracted skills found.</p>
+                    <p className="text-sm text-slate-600">
+                      No extracted skills found for this application.
+                    </p>
                   )}
                 </div>
+              </div>
 
-                <div className="flex gap-3 mt-4">
-                  {application.cv && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleDownloadCV(
-                          application._id,
-                          application.cv?.originalName
-                        )
-                      }
-                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-                    >
-                      {downloadingId === application._id
-                        ? "Downloading CV..."
-                        : "Download CV"}
-                    </button>
-                  )}
+              <div className="mt-6 flex flex-wrap gap-3">
+                {application.cv ? (
+                  <Button
+                    variant="success"
+                    onClick={() =>
+                      handleDownloadCV(
+                        application._id,
+                        application.cv?.originalName
+                      )
+                    }
+                  >
+                    {downloadingId === application._id
+                      ? "Downloading CV..."
+                      : "Download CV"}
+                  </Button>
+                ) : null}
 
+                {application.applicant?._id ? (
                   <Link
-                    href={`/profile/${application.applicant?._id}`}
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                    href={`/profile/${application.applicant._id}`}
+                    className={buttonStyles({ variant: "outline", size: "md" })}
                   >
                     View Profile
                   </Link>
-                </div>
+                ) : null}
               </div>
-            ))}
-          </div>
+            </article>
+          ))
         )}
       </div>
     </div>

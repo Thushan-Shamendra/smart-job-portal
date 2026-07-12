@@ -1,8 +1,30 @@
 "use client";
 
 import Link from "next/link";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import Button, { buttonStyles } from "@/components/ui/Button";
+import ErrorState from "@/components/ui/ErrorState";
+import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import SkillBadge from "@/components/ui/SkillBadge";
+import TextareaField from "@/components/ui/TextareaField";
+import { useAppSession } from "@/hooks/useAppSession";
+import { apiRequest, buildApiUrl, isUnauthorizedError } from "@/lib/api";
+import type {
+  ApplyJobResponse,
+  CVFile,
+  Job,
+  JobResponse,
+  ProfileResponse,
+} from "@/lib/types";
+import { formatDate } from "@/lib/utils";
 
 const MAX_CV_SIZE_BYTES = 2 * 1024 * 1024;
 
@@ -11,25 +33,72 @@ const allowedCVTypes = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
-type ApplyJobResponse = {
-  success: boolean;
-  message?: string;
-  extractedSkills?: string[];
-};
-
 export default function ApplyJobPageContent() {
   const params = useParams();
   const router = useRouter();
+  const { loading: sessionLoading, token } = useAppSession({
+    required: true,
+    allowedRoles: ["jobseeker"],
+  });
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const jobId = params.id as string;
 
-  const [coverLetter, setCoverLetter] = useState<string>("");
+  const [job, setJob] = useState<Job | null>(null);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [coverLetter, setCoverLetter] = useState("");
   const [selectedCV, setSelectedCV] = useState<File | null>(null);
-  const [selectedFilename, setSelectedFilename] = useState<string>("");
-  const [message, setMessage] = useState<string>("");
-  const [error, setError] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
+  const [selectedFilename, setSelectedFilename] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [extractedSkills, setExtractedSkills] = useState<string[]>([]);
+  const [profileCV, setProfileCV] = useState<CVFile | null>(null);
+  const [showCVPicker, setShowCVPicker] = useState(false);
+
+  useEffect(() => {
+    if (sessionLoading) {
+      return;
+    }
+
+    const loadPageData = async () => {
+      setPageLoading(true);
+      setError("");
+
+      try {
+        const jobPromise = apiRequest<JobResponse>(`/jobs/${jobId}`);
+        const profilePromise = token
+          ? apiRequest<ProfileResponse>("/profile/me", { token }).catch(() => ({
+              success: false,
+            } as ProfileResponse))
+          : Promise.resolve({ success: false } as ProfileResponse);
+
+        const [jobResult, profileResult] = await Promise.all([
+          jobPromise,
+          profilePromise,
+        ]);
+
+        if (jobResult.job) {
+          setJob(jobResult.job);
+        } else {
+          setError("Job not found.");
+        }
+
+        const existingProfileCV = profileResult.profile?.cv || null;
+
+        setProfileCV(existingProfileCV);
+        setShowCVPicker(!existingProfileCV);
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error ? loadError.message : "Unable to load this job."
+        );
+      } finally {
+        setPageLoading(false);
+      }
+    };
+
+    void loadPageData();
+  }, [jobId, sessionLoading, token]);
 
   const resetSelection = () => {
     setSelectedCV(null);
@@ -63,192 +132,345 @@ export default function ApplyJobPageContent() {
 
     setSelectedCV(file);
     setSelectedFilename(file.name);
+    setShowCVPicker(true);
+  };
+
+  const getProfileCVFile = async () => {
+    if (!token || !profileCV?.originalName) {
+      return null;
+    }
+
+    const response = await fetch(buildApiUrl("/profile/me/cv"), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      let message = "Unable to load your saved CV.";
+
+      try {
+        const errorData = (await response.json()) as { message?: string };
+        message = errorData.message || message;
+      } catch {
+        // Ignore binary parse failures.
+      }
+
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const fileType =
+      profileCV.contentType || blob.type || "application/octet-stream";
+
+    return new File([blob], profileCV.originalName, {
+      type: fileType,
+    });
   };
 
   const handleApply = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    setMessage("");
-    setError("");
-    setExtractedSkills([]);
-
-    const token = localStorage.getItem("token");
 
     if (!token) {
       router.push("/login");
       return;
     }
 
+    setMessage("");
+    setError("");
+    setExtractedSkills([]);
+
     if (!coverLetter.trim()) {
       setError("Cover letter is required.");
       return;
     }
 
-    if (!selectedCV) {
-      setError("Please upload your CV before submitting.");
-      return;
-    }
-
-    if (!allowedCVTypes.includes(selectedCV.type)) {
-      setError("Please upload a PDF or DOCX CV file.");
-      return;
-    }
-
-    if (selectedCV.size > MAX_CV_SIZE_BYTES) {
-      setError("CV file size must be 2 MB or less.");
-      return;
-    }
-
-    setLoading(true);
+    setSubmitting(true);
 
     try {
+      let cvToSubmit = selectedCV;
+
+      if (!cvToSubmit && profileCV?.originalName) {
+        cvToSubmit = await getProfileCVFile();
+      }
+
+      if (!cvToSubmit) {
+        setError("Please upload your CV before submitting.");
+        return;
+      }
+
+      if (!allowedCVTypes.includes(cvToSubmit.type)) {
+        setError("Please upload a PDF or DOCX CV file.");
+        return;
+      }
+
+      if (cvToSubmit.size > MAX_CV_SIZE_BYTES) {
+        setError("CV file size must be 2 MB or less.");
+        return;
+      }
+
       const formData = new FormData();
       formData.append("coverLetter", coverLetter.trim());
-      formData.append("cv", selectedCV);
+      formData.append("cv", cvToSubmit);
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/applications/${jobId}/apply`,
+      const data = await apiRequest<ApplyJobResponse>(
+        `/applications/${jobId}/apply`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          token,
           body: formData,
         }
       );
-
-      const data: ApplyJobResponse = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || "Failed to apply for job.");
-        return;
-      }
 
       setExtractedSkills(data.extractedSkills || []);
       setMessage(data.message || "Job application submitted successfully.");
       setCoverLetter("");
       resetSelection();
-    } catch {
-      setError("Something went wrong while submitting your application.");
+      setShowCVPicker(!profileCV);
+    } catch (submitError) {
+      if (isUnauthorizedError(submitError)) {
+        router.push("/login");
+        return;
+      }
+
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to submit your application."
+      );
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow">
-        <Link href={`/jobs/${jobId}`} className="text-blue-600">
-          Back to Job Details
-        </Link>
+  if (sessionLoading || pageLoading) {
+    return (
+      <div className="page-shell">
+        <LoadingSkeleton className="h-10 w-72" />
+        <div className="mt-8 grid gap-8 xl:grid-cols-[0.85fr_1.15fr]">
+          <LoadingSkeleton className="h-80 w-full rounded-[32px]" />
+          <LoadingSkeleton className="h-[34rem] w-full rounded-[32px]" />
+        </div>
+      </div>
+    );
+  }
 
-        <h1 className="text-3xl font-bold mt-4 mb-6">Apply for Job</h1>
-
-        {message && (
-          <div className="bg-green-100 text-green-700 p-4 rounded mb-4">
-            <p className="font-medium">{message}</p>
-
-            <p className="mt-1 text-sm">
-              Your CV was uploaded successfully and analyzed for matching
-              skills.
-            </p>
-          </div>
-        )}
-
-        {error && (
-          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</p>
-        )}
-
-        {message ? (
-          <div className="space-y-6">
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-5">
-              <h2 className="text-xl font-semibold mb-3">Extracted Skills</h2>
-
-              {extractedSkills.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {extractedSkills.map((skill) => (
-                    <span
-                      key={skill}
-                      className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-600">
-                  No skills were extracted from this CV.
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                type="button"
-                onClick={() => router.push("/my-applications")}
-                className="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700 transition"
-              >
-                Go to My Applications
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMessage("");
-                  setExtractedSkills([]);
-                }}
-                className="border border-gray-300 text-gray-700 px-6 py-3 rounded hover:bg-gray-50 transition"
-              >
-                Submit Another Application
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleApply} className="space-y-5">
-            <div>
-              <label className="block mb-2 font-medium">Cover Letter</label>
-
-              <textarea
-                value={coverLetter}
-                onChange={(e) => setCoverLetter(e.target.value)}
-                placeholder="Write a short cover letter"
-                className="w-full border p-3 rounded h-40"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block mb-2 font-medium">Upload CV</label>
-
-              <input
-                type="file"
-                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                onChange={handleCVChange}
-                className="w-full border p-3 rounded bg-white"
-                required
-              />
-
-              <p className="text-sm text-gray-500 mt-2">
-                Accepted formats: PDF and DOCX. Maximum size: 2 MB.
-              </p>
-
-              {selectedFilename && (
-                <p className="text-sm text-gray-700 mt-2">
-                  Selected file:{" "}
-                  <span className="font-medium">{selectedFilename}</span>
-                </p>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-green-600 text-white p-3 rounded hover:bg-green-700 disabled:bg-green-400 transition"
+  if (error && !job && !message) {
+    return (
+      <div className="page-shell">
+        <ErrorState
+          title="Application unavailable"
+          message={error}
+          action={
+            <Link
+              href="/jobs"
+              className={buttonStyles({ variant: "outline", size: "md" })}
             >
-              {loading ? "Submitting Application..." : "Submit Application"}
-            </button>
-          </form>
-        )}
+              Back to Jobs
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Apply for Job"
+        title={job ? `Apply for ${job.title}` : "Submit your application"}
+        description={
+          job
+            ? `${job.company} - ${job.location} - Deadline ${formatDate(job.deadline)}`
+            : "Upload your CV and submit a tailored cover letter."
+        }
+        actions={
+          <Link
+            href={job ? `/jobs/${job._id}` : "/jobs"}
+            className={buttonStyles({ variant: "outline", size: "md" })}
+          >
+            Back to Job Details
+          </Link>
+        }
+      />
+
+      <div className="mt-8 grid gap-8 xl:grid-cols-[0.85fr_1.15fr]">
+        <aside className="space-y-6">
+          <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-slate-950">
+              CV upload rules
+            </h2>
+            <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+              <li>Accepted file formats: PDF and DOCX only.</li>
+              <li>Maximum file size: 2 MB.</li>
+              <li>Your CV is sent as `FormData` using the `cv` field.</li>
+              <li>Authentication stays on the Authorization header.</li>
+            </ul>
+          </div>
+
+          {job ? (
+            <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-slate-950">
+                Role snapshot
+              </h2>
+              <div className="mt-4 space-y-3 text-sm text-slate-600">
+                <p>
+                  <span className="font-semibold text-slate-800">Company:</span>{" "}
+                  {job.company}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800">Location:</span>{" "}
+                  {job.location}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800">Job type:</span>{" "}
+                  {job.jobType}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800">Category:</span>{" "}
+                  {job.category}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </aside>
+
+        <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+          {message ? (
+            <div>
+              <div className="rounded-[26px] border border-emerald-200 bg-emerald-50 p-5">
+                <h2 className="text-xl font-semibold text-emerald-800">
+                  Application submitted successfully
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-emerald-700">
+                  {message}
+                </p>
+              </div>
+
+              <div className="mt-8 rounded-[28px] bg-slate-50 p-6">
+                <h3 className="text-xl font-semibold text-slate-950">
+                  Skills extracted from your CV
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  These are the skills returned by the Groq-powered CV analysis
+                  service.
+                </p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {extractedSkills.length > 0 ? (
+                    extractedSkills.map((skill) => (
+                      <SkillBadge key={skill} label={skill} />
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-600">
+                      No skills were extracted from this CV.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  href="/my-applications"
+                  className={buttonStyles({ variant: "primary", size: "md" })}
+                >
+                  Go to My Applications
+                </Link>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setMessage("");
+                    setExtractedSkills([]);
+                  }}
+                >
+                  Submit Another Application
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {error ? <ErrorState message={error} /> : null}
+
+              <form onSubmit={handleApply} className="mt-6 space-y-5">
+                <TextareaField
+                  label="Cover Letter"
+                  value={coverLetter}
+                  onChange={(e) => setCoverLetter(e.target.value)}
+                  placeholder="Explain why you're a strong fit for this role and highlight relevant achievements."
+                  rows={8}
+                  required
+                />
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="block text-sm font-medium text-slate-700">
+                      Upload CV
+                    </span>
+                    {profileCV?.originalName ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowCVPicker(true);
+                          fileInputRef.current?.click();
+                        }}
+                      >
+                        Change CV
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {profileCV?.originalName && !selectedFilename ? (
+                    <div className="rounded-[22px] bg-slate-50 p-4">
+                      <p className="text-sm font-medium text-slate-700">
+                        Using saved profile CV
+                      </p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {profileCV.originalName}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <label className={showCVPicker || !profileCV ? "block" : "hidden"}>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      onChange={handleCVChange}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition file:mr-4 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100 focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                    />
+                    <span className="mt-2 block text-sm text-slate-500">
+                      Upload one PDF or DOCX file, up to 2 MB.
+                    </span>
+                  </label>
+                </div>
+
+                {selectedFilename ? (
+                  <div className="rounded-[22px] bg-slate-50 p-4">
+                    <p className="text-sm font-medium text-slate-700">
+                      Selected file
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {selectedFilename}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-3">
+                  <Button type="submit" size="lg" disabled={submitting}>
+                    {submitting ? "Uploading CV and submitting..." : "Submit Application"}
+                  </Button>
+                  <Link
+                    href="/my-applications"
+                    className={buttonStyles({ variant: "outline", size: "lg" })}
+                  >
+                    View My Applications
+                  </Link>
+                </div>
+              </form>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

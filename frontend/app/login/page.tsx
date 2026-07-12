@@ -1,131 +1,140 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState, type ChangeEvent, type FormEvent } from "react";
+import AuthShell from "@/components/auth/AuthShell";
+import Button from "@/components/ui/Button";
+import InputField from "@/components/ui/InputField";
+import { apiRequest, ApiError } from "@/lib/api";
+import { getDashboardRoute, persistAuth } from "@/lib/auth";
+import type { AuthResponse } from "@/lib/types";
 
 type LoginFormData = {
   email: string;
   password: string;
 };
 
-type LoginResponse = {
-  success: boolean;
-  message?: string;
-  token?: string;
-  user?: {
-    id: string;
-    name: string;
-    email: string;
-    role: "jobseeker" | "employer" | "admin";
-  };
-};
-
 export default function LoginPage() {
   const router = useRouter();
-
   const [formData, setFormData] = useState<LoginFormData>({
     email: "",
     password: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [error, setError] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setFormData((current) => ({
+      ...current,
       [e.target.name]: e.target.value,
-    });
+    }));
   };
 
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setError("");
     setLoading(true);
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(formData),
-        }
-      );
-
-      const data: LoginResponse = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || "Login failed");
-        return;
-      }
+      const data = await apiRequest<AuthResponse>("/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
 
       if (!data.token || !data.user) {
-        setError("Invalid login response");
+        setError("Invalid login response received.");
         return;
       }
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-
-      router.push("/dashboard");
-    } catch {
-      setError("Something went wrong");
+      persistAuth(data.token, data.user);
+      router.push(getDashboardRoute(data.user.role));
+    } catch (loginError) {
+      setError(
+        loginError instanceof ApiError
+          ? loginError.message
+          : "Unable to sign you in right now."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <form
-        onSubmit={handleLogin}
-        className="bg-white p-8 rounded-lg shadow-md w-full max-w-md"
-      >
-        <h1 className="text-2xl font-bold mb-6 text-center">Login</h1>
+    <AuthShell
+      eyebrow="Welcome Back"
+      title="Sign in to continue with JobPilot."
+      description="Use your existing account to browse jobs, manage applications, post new roles, or access admin tools based on your role."
+      footer={
+        <p>
+          Don&apos;t have an account yet?{" "}
+          <Link href="/register" className="font-semibold text-blue-700">
+            Create one now
+          </Link>
+        </p>
+      }
+    >
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-700">
+          Login
+        </p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+          Access your account
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          Your session uses JWT authentication and role-aware navigation.
+        </p>
+      </div>
 
-        {error && (
-          <p className="bg-red-100 text-red-600 p-3 rounded mb-4">{error}</p>
-        )}
+      {error ? (
+        <div className="mt-6 rounded-[22px] border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
 
-        <input
+      <form onSubmit={handleLogin} className="mt-8 space-y-5">
+        <InputField
+          label="Email address"
           type="email"
           name="email"
-          placeholder="Email Address"
           value={formData.email}
           onChange={handleChange}
-          className="w-full border p-3 rounded mb-4"
+          placeholder="you@example.com"
           required
         />
 
-        <input
-          type="password"
-          name="password"
-          placeholder="Password"
-          value={formData.password}
-          onChange={handleChange}
-          className="w-full border p-3 rounded mb-4"
-          required
-        />
+        <label className="block">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-700">Password</span>
+            <button
+              type="button"
+              onClick={() => setShowPassword((current) => !current)}
+              className="text-sm font-medium text-blue-700"
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700 disabled:bg-blue-400"
-        >
-          {loading ? "Logging in..." : "Login"}
-        </button>
+          <input
+            type={showPassword ? "text" : "password"}
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            placeholder="Enter your password"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
+            required
+          />
+        </label>
 
-        <p className="text-center mt-4">
-          Don&apos;t have an account?{" "}
-          <a href="/register" className="text-blue-600">
-            Register
-          </a>
-        </p>
+        <Button type="submit" fullWidth size="lg" disabled={loading}>
+          {loading ? "Signing In..." : "Sign In"}
+        </Button>
       </form>
-    </div>
+    </AuthShell>
   );
 }

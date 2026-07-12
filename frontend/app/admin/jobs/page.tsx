@@ -1,261 +1,161 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-
-type UserRole = "jobseeker" | "employer" | "admin";
-
-type LoggedUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-};
-
-type Employer = {
-  _id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-};
-
-type Job = {
-  _id: string;
-  title: string;
-  company: string;
-  location: string;
-  jobType: string;
-  category: string;
-  salary: string;
-  deadline: string;
-  skills?: string[];
-  isActive: boolean;
-  employer?: Employer;
-  createdAt: string;
-};
-
-type JobsResponse = {
-  success: boolean;
-  message?: string;
-  jobs: Job[];
-};
-
-type DeleteJobResponse = {
-  success: boolean;
-  message?: string;
-};
+import { useRouter } from "next/navigation";
+import JobCard from "@/components/jobs/JobCard";
+import { buttonStyles } from "@/components/ui/Button";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
+import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import { useAppSession } from "@/hooks/useAppSession";
+import { apiRequest, isUnauthorizedError } from "@/lib/api";
+import type { Job, JobsResponse } from "@/lib/types";
 
 export default function AdminJobsPage() {
   const router = useRouter();
+  const { loading: sessionLoading, token, user } = useAppSession({
+    required: true,
+    allowedRoles: ["admin"],
+  });
 
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [error, setError] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    const fetchJobs = async () => {
-      const token = localStorage.getItem("token");
-      const loggedUser: LoggedUser | null = JSON.parse(
-        localStorage.getItem("user") || "null"
-      );
+    if (sessionLoading || !token || !user) {
+      return;
+    }
 
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      if (loggedUser?.role !== "admin") {
-        router.push("/dashboard");
-        return;
-      }
+    const loadJobs = async () => {
+      setLoading(true);
+      setError("");
 
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/jobs`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data: JobsResponse = await res.json();
-
-        if (!res.ok) {
-          setError(data.message || "Failed to fetch jobs");
+        const data = await apiRequest<JobsResponse>("/admin/jobs", { token });
+        setJobs(data.jobs);
+      } catch (loadError) {
+        if (isUnauthorizedError(loadError)) {
+          router.push("/login");
           return;
         }
 
-        setJobs(data.jobs);
-      } catch {
-        setError("Something went wrong");
+        setError(
+          loadError instanceof Error ? loadError.message : "Unable to load jobs."
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    fetchJobs();
-  }, [router]);
+    void loadJobs();
+  }, [router, sessionLoading, token, user]);
 
-  const handleDeleteJob = async (jobId: string) => {
-    const confirmDelete = confirm("Are you sure you want to delete this job?");
-
-    if (!confirmDelete) {
+  const confirmDelete = async () => {
+    if (!token || !jobToDelete) {
       return;
     }
 
-    const token = localStorage.getItem("token");
+    setDeleting(true);
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/jobs/${jobId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      await apiRequest(`/admin/jobs/${jobToDelete._id}`, {
+        method: "DELETE",
+        token,
+      });
 
-      const data: DeleteJobResponse = await res.json();
-
-      if (!res.ok) {
-        alert(data.message || "Failed to delete job");
+      setJobs((current) => current.filter((item) => item._id !== jobToDelete._id));
+      setJobToDelete(null);
+    } catch (deleteError) {
+      if (isUnauthorizedError(deleteError)) {
+        router.push("/login");
         return;
       }
 
-      setJobs((prevJobs) => prevJobs.filter((job) => job._id !== jobId));
-
-      alert(data.message || "Job deleted successfully");
-    } catch {
-      alert("Something went wrong");
+      setError(
+        deleteError instanceof Error ? deleteError.message : "Unable to delete this job."
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
-  if (loading) {
-    return <p className="p-6">Loading jobs...</p>;
+  if (sessionLoading || loading) {
+    return (
+      <div className="page-shell">
+        <LoadingSkeleton className="h-10 w-72" />
+        <div className="mt-8 space-y-6">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <LoadingSkeleton key={index} className="h-72 w-full rounded-[32px]" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Manage Jobs</h1>
-            <p className="text-gray-600 mt-1">
-              View and remove invalid or fake job posts.
-            </p>
-          </div>
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Admin"
+        title="Review all platform job listings"
+        description="Review employer-owned listings and remove roles that should no longer appear publicly."
+        />
 
-          <div className="flex gap-4">
-            <Link href="/admin/dashboard" className="text-purple-600">
-              Admin Dashboard
-            </Link>
-
-            <Link href="/dashboard" className="text-blue-600">
-              Main Dashboard
-            </Link>
-          </div>
+      {error ? (
+        <div className="mt-8">
+          <ErrorState message={error} />
         </div>
+      ) : null}
 
-        {error && (
-          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">
-            {error}
-          </p>
-        )}
-
+      <div className="mt-8 space-y-6">
         {jobs.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow">
-            <p>No jobs found.</p>
-          </div>
+          <EmptyState
+            title="No jobs found"
+            description="Jobs created by employers will appear here automatically."
+          />
         ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {jobs.map((job) => (
-              <div key={job._id} className="bg-white p-6 rounded-lg shadow">
-                <div className="flex justify-between items-start gap-4">
-                  <div>
-                    <h2 className="text-xl font-bold mb-2">{job.title}</h2>
-
-                    <p className="text-gray-700 mb-1">
-                      <strong>Company:</strong> {job.company}
-                    </p>
-
-                    <p className="text-gray-700 mb-1">
-                      <strong>Employer:</strong>{" "}
-                      {job.employer?.name || "Not available"}{" "}
-                      {job.employer?.email && `(${job.employer.email})`}
-                    </p>
-
-                    <p className="text-gray-700 mb-1">
-                      <strong>Location:</strong> {job.location}
-                    </p>
-
-                    <p className="text-gray-700 mb-1">
-                      <strong>Type:</strong> {job.jobType}
-                    </p>
-
-                    <p className="text-gray-700 mb-1">
-                      <strong>Category:</strong> {job.category}
-                    </p>
-
-                    <p className="text-gray-700 mb-1">
-                      <strong>Salary:</strong> {job.salary}
-                    </p>
-
-                    <p className="text-gray-700 mb-1">
-                      <strong>Status:</strong>{" "}
-                      <span
-                        className={`px-3 py-1 rounded text-sm font-semibold ${
-                          job.isActive
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        }`}
-                      >
-                        {job.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </p>
-
-                    <p className="text-gray-700 mb-4">
-                      <strong>Deadline:</strong>{" "}
-                      {new Date(job.deadline).toLocaleDateString()}
-                    </p>
-
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {job.skills?.map((skill, index) => (
-                        <span
-                          key={index}
-                          className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Link
-                      href={`/jobs/${job._id}`}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                    >
-                      View
-                    </Link>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteJob(job._id)}
-                      className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-
-                <p className="text-gray-500 text-sm mt-4">
-                  Posted on {new Date(job.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-            ))}
-          </div>
+          jobs.map((job) => (
+            <JobCard
+              key={job._id}
+              job={job}
+              userRole="admin"
+              showApplyAction={false}
+              footer={
+                <>
+                  <Link
+                    href={`/jobs/${job._id}`}
+                    className={buttonStyles({ variant: "outline", size: "sm" })}
+                  >
+                    View Job
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setJobToDelete(job)}
+                    className={buttonStyles({ variant: "danger", size: "sm" })}
+                  >
+                    Delete Job
+                  </button>
+                </>
+              }
+            />
+          ))
         )}
       </div>
+
+      <ConfirmationModal
+        open={Boolean(jobToDelete)}
+        title="Delete this job listing?"
+        description={`This will permanently remove "${jobToDelete?.title || "this job"}" from JobPilot.`}
+        confirmLabel="Delete Job"
+        busy={deleting}
+        onCancel={() => setJobToDelete(null)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

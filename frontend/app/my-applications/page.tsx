@@ -1,98 +1,73 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import Button, { buttonStyles } from "@/components/ui/Button";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
+import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import SkillBadge from "@/components/ui/SkillBadge";
+import StatusBadge from "@/components/ui/StatusBadge";
+import { useAppSession } from "@/hooks/useAppSession";
+import { apiRequest, isUnauthorizedError } from "@/lib/api";
 import { downloadApplicationCV } from "@/lib/downloadApplicationCV";
-
-type ApplicationStatus =
-  | "Pending"
-  | "Reviewed"
-  | "Shortlisted"
-  | "Rejected"
-  | "Accepted";
-
-type AppliedJob = {
-  _id: string;
-  title: string;
-  company: string;
-  location: string;
-  jobType: string;
-  salary: string;
-};
-
-type JobApplication = {
-  _id: string;
-  job?: AppliedJob;
-  cv?: {
-    originalName?: string;
-    filename?: string;
-    contentType?: string;
-    size?: number;
-  };
-  extractedSkills?: string[];
-  status: ApplicationStatus;
-  createdAt: string;
-};
-
-type ApplicationsResponse = {
-  success: boolean;
-  message?: string;
-  applications: JobApplication[];
-};
+import type { ApplicationsResponse, JobApplication } from "@/lib/types";
+import { formatDate } from "@/lib/utils";
 
 export default function MyApplicationsPage() {
   const router = useRouter();
+  const { loading: sessionLoading, token, user } = useAppSession({
+    required: true,
+    allowedRoles: ["jobseeker"],
+  });
 
   const [applications, setApplications] = useState<JobApplication[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>("");
-  const [downloadError, setDownloadError] = useState<string>("");
-  const [downloadingId, setDownloadingId] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [downloadError, setDownloadError] = useState("");
+  const [downloadingId, setDownloadingId] = useState("");
 
   useEffect(() => {
-    const fetchApplications = async () => {
-      const token = localStorage.getItem("token");
+    if (sessionLoading || !token || !user) {
+      return;
+    }
 
-      if (!token) {
-        router.push("/login");
-        return;
-      }
+    const loadApplications = async () => {
+      setLoading(true);
+      setError("");
 
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/applications/my-applications`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        const data = await apiRequest<ApplicationsResponse>(
+          "/applications/my-applications",
+          { token }
         );
 
-        const data: ApplicationsResponse = await res.json();
-
-        if (!res.ok) {
-          setError(data.message || "Failed to fetch applications");
+        setApplications(data.applications);
+      } catch (loadError) {
+        if (isUnauthorizedError(loadError)) {
+          router.push("/login");
           return;
         }
 
-        setApplications(data.applications);
-      } catch {
-        setError("Something went wrong");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load your applications."
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    fetchApplications();
-  }, [router]);
+    void loadApplications();
+  }, [router, sessionLoading, token, user]);
 
   const handleDownloadCV = async (
     applicationId: string,
     originalName?: string
   ) => {
-    const token = localStorage.getItem("token");
-
     if (!token) {
       router.push("/login");
       return;
@@ -102,147 +77,174 @@ export default function MyApplicationsPage() {
     setDownloadingId(applicationId);
 
     try {
-      await downloadApplicationCV(
-        applicationId,
-        token,
-        originalName || "my-cv"
-      );
+      await downloadApplicationCV(applicationId, token, originalName || "my-cv");
     } catch (downloadFailure) {
       setDownloadError(
         downloadFailure instanceof Error
           ? downloadFailure.message
-          : "Something went wrong while downloading your CV."
+          : "Unable to download your CV."
       );
     } finally {
       setDownloadingId("");
     }
   };
 
-  if (loading) {
-    return <p className="p-6">Loading applications...</p>;
+  if (sessionLoading || loading) {
+    return (
+      <div className="page-shell">
+        <LoadingSkeleton className="h-10 w-64" />
+        <div className="mt-8 space-y-6">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"
+            >
+              <LoadingSkeleton className="h-6 w-56" />
+              <LoadingSkeleton className="mt-3 h-4 w-40" />
+              <LoadingSkeleton className="mt-6 h-20 w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">My Applications</h1>
-
-          <Link href="/dashboard" className="text-blue-600">
-            Dashboard
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="My Applications"
+        title="Track every application in one place"
+        description="Review statuses, download the CV you submitted, and see the skills extracted from your uploaded file."
+        actions={
+          <Link
+            href="/jobs"
+            className={buttonStyles({ variant: "primary", size: "md" })}
+          >
+            Browse More Jobs
           </Link>
-        </div>
+        }
+      />
 
-        {error && (
-          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">
-            {error}
-          </p>
-        )}
+      <div className="mt-8 space-y-4">
+        {error ? <ErrorState message={error} /> : null}
+        {downloadError ? <ErrorState title="Download failed" message={downloadError} /> : null}
+      </div>
 
-        {downloadError && (
-          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">
-            {downloadError}
-          </p>
-        )}
-
-        {applications.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow">
-            <p>You have not applied for any jobs yet.</p>
-
-            <Link
-              href="/jobs"
-              className="inline-block mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            >
-              Browse Jobs
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {applications.map((application) => (
-              <div
-                key={application._id}
-                className="bg-white p-6 rounded-lg shadow"
+      <div className="mt-8 space-y-6">
+        {!error && applications.length === 0 ? (
+          <EmptyState
+            title="No applications yet"
+            description="Your submitted applications will appear here with status updates and extracted CV skills."
+            action={
+              <Link
+                href="/jobs"
+                className={buttonStyles({ variant: "primary", size: "md" })}
               >
-                <h2 className="text-xl font-bold mb-2">
-                  {application.job?.title}
-                </h2>
-
-                <p className="text-gray-700 mb-1">
-                  <strong>Company:</strong> {application.job?.company}
-                </p>
-
-                <p className="text-gray-700 mb-1">
-                  <strong>Location:</strong> {application.job?.location}
-                </p>
-
-                <p className="text-gray-700 mb-1">
-                  <strong>Job Type:</strong> {application.job?.jobType}
-                </p>
-
-                <p className="text-gray-700 mb-1">
-                  <strong>Salary:</strong> {application.job?.salary}
-                </p>
-
-                <p className="text-gray-700 mb-1">
-                  <strong>Status:</strong>{" "}
-                  <span className="font-semibold text-blue-600">
-                    {application.status}
-                  </span>
-                </p>
-
-                <p className="text-gray-700 mb-4">
-                  <strong>Applied Date:</strong>{" "}
-                  {new Date(application.createdAt).toLocaleDateString()}
-                </p>
-
-                <div className="mb-4">
-                  <p className="font-semibold mb-2">Extracted Skills:</p>
-
-                  {application.extractedSkills &&
-                  application.extractedSkills.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {application.extractedSkills.map((skill) => (
-                        <span
-                          key={`${application._id}-${skill}`}
-                          className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-600">No extracted skills found.</p>
-                  )}
+                Start applying
+              </Link>
+            }
+          />
+        ) : (
+          applications.map((application) => (
+            <article
+              key={application._id}
+              className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm"
+            >
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                    {application.job?.title || "Job role unavailable"}
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {application.job?.company || "Unknown company"} ·{" "}
+                    {application.job?.location || "Unknown location"}
+                  </p>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
-                  <Link
-                    href={`/jobs/${application.job?._id}`}
-                    className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                  >
-                    View Job
-                  </Link>
+                <div className="flex flex-wrap items-center gap-3">
+                  <StatusBadge status={application.status} />
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                    Applied {formatDate(application.createdAt)}
+                  </span>
+                </div>
+              </div>
 
-                  {application.cv && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleDownloadCV(
-                          application._id,
-                          application.cv?.originalName
-                        )
-                      }
-                      className="inline-block bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-                    >
-                      {downloadingId === application._id
-                        ? "Downloading My CV..."
-                        : "Download My CV"}
-                    </button>
+              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-[22px] bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-500">Job Type</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">
+                    {application.job?.jobType || "Not specified"}
+                  </p>
+                </div>
+                <div className="rounded-[22px] bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-500">Salary</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">
+                    {application.job?.salary || "Not specified"}
+                  </p>
+                </div>
+                <div className="rounded-[22px] bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-500">Category</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">
+                    {application.job?.category || "Not specified"}
+                  </p>
+                </div>
+                <div className="rounded-[22px] bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-500">Deadline</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">
+                    {formatDate(application.job?.deadline)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Extracted CV Skills
+                </h3>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {application.extractedSkills &&
+                  application.extractedSkills.length > 0 ? (
+                    application.extractedSkills.map((skill) => (
+                      <SkillBadge
+                        key={`${application._id}-${skill}`}
+                        label={skill}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-600">
+                      No skills were extracted from this application.
+                    </p>
                   )}
                 </div>
               </div>
-            ))}
-          </div>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                {application.job?._id ? (
+                  <Link
+                    href={`/jobs/${application.job._id}`}
+                    className={buttonStyles({ variant: "outline", size: "md" })}
+                  >
+                    View Job Details
+                  </Link>
+                ) : null}
+
+                {application.cv ? (
+                  <Button
+                    variant="success"
+                    onClick={() =>
+                      handleDownloadCV(
+                        application._id,
+                        application.cv?.originalName
+                      )
+                    }
+                  >
+                    {downloadingId === application._id
+                      ? "Downloading My CV..."
+                      : "Download My CV"}
+                  </Button>
+                ) : null}
+              </div>
+            </article>
+          ))
         )}
       </div>
     </div>

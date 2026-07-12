@@ -1,235 +1,190 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-
-type UserRole = "jobseeker" | "employer" | "admin";
-
-type LoggedUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-};
-
-type Job = {
-  _id: string;
-  title: string;
-  company: string;
-  location: string;
-  jobType: string;
-  salary: string;
-  deadline: string;
-  skills?: string[];
-  isActive: boolean;
-};
-
-type MyJobsResponse = {
-  success: boolean;
-  message?: string;
-  jobs: Job[];
-};
-
-type DeleteJobResponse = {
-  success: boolean;
-  message?: string;
-};
+import JobCard from "@/components/jobs/JobCard";
+import { buttonStyles } from "@/components/ui/Button";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
+import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import { useAppSession } from "@/hooks/useAppSession";
+import { apiRequest, isUnauthorizedError } from "@/lib/api";
+import type { Job, JobsResponse } from "@/lib/types";
 
 export default function MyJobsPage() {
   const router = useRouter();
+  const { loading: sessionLoading, token, user } = useAppSession({
+    required: true,
+    allowedRoles: ["employer"],
+  });
 
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [error, setError] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    const fetchMyJobs = async () => {
-      const token = localStorage.getItem("token");
-      const user: LoggedUser | null = JSON.parse(
-        localStorage.getItem("user") || "null"
-      );
+    if (sessionLoading || !token || !user) {
+      return;
+    }
 
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      if (user?.role !== "employer") {
-        router.push("/dashboard");
-        return;
-      }
+    const loadJobs = async () => {
+      setLoading(true);
+      setError("");
 
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/jobs/my-jobs`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const data: MyJobsResponse = await res.json();
-
-        if (!res.ok) {
-          setError(data.message || "Failed to fetch jobs");
+        const data = await apiRequest<JobsResponse>("/jobs/my-jobs", { token });
+        setJobs(data.jobs);
+      } catch (loadError) {
+        if (isUnauthorizedError(loadError)) {
+          router.push("/login");
           return;
         }
 
-        setJobs(data.jobs);
-      } catch {
-        setError("Something went wrong");
+        setError(
+          loadError instanceof Error ? loadError.message : "Unable to load your jobs."
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMyJobs();
-  }, [router]);
+    void loadJobs();
+  }, [router, sessionLoading, token, user]);
 
-  const handleDelete = async (jobId: string) => {
-    const confirmDelete = confirm("Are you sure you want to delete this job?");
-
-    if (!confirmDelete) {
+  const handleDelete = async () => {
+    if (!token || !jobToDelete) {
       return;
     }
 
-    const token = localStorage.getItem("token");
+    setDeleting(true);
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/jobs/${jobId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      await apiRequest(`/jobs/${jobToDelete._id}`, {
+        method: "DELETE",
+        token,
+      });
 
-      const data: DeleteJobResponse = await res.json();
-
-      if (!res.ok) {
-        alert(data.message || "Failed to delete job");
+      setJobs((current) => current.filter((job) => job._id !== jobToDelete._id));
+      setJobToDelete(null);
+    } catch (deleteError) {
+      if (isUnauthorizedError(deleteError)) {
+        router.push("/login");
         return;
       }
 
-      setJobs((prevJobs) => prevJobs.filter((job) => job._id !== jobId));
-    } catch {
-      alert("Something went wrong");
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Unable to delete this job."
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
-  if (loading) {
-    return <p className="p-6">Loading jobs...</p>;
+  if (sessionLoading || loading) {
+    return (
+      <div className="page-shell">
+        <LoadingSkeleton className="h-10 w-72" />
+        <div className="mt-8 space-y-6">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <LoadingSkeleton key={index} className="h-72 w-full rounded-[32px]" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">My Posted Jobs</h1>
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Employer"
+        title="Manage your published roles"
+        description="Track every job post you own, edit details, and move directly into the applicant review flow."
+        actions={
+          <Link
+            href="/employer/add-job"
+            className={buttonStyles({ variant: "primary", size: "md" })}
+          >
+            Post New Job
+          </Link>
+        }
+      />
 
-          <div className="flex gap-4">
-            <Link href="/employer/add-job" className="text-green-600">
-              Post New Job
-            </Link>
-
-            <Link href="/dashboard" className="text-blue-600">
-              Dashboard
-            </Link>
-          </div>
+      {error ? (
+        <div className="mt-8">
+          <ErrorState message={error} />
         </div>
+      ) : null}
 
-        {error && (
-          <p className="bg-red-100 text-red-700 p-3 rounded mb-4">
-            {error}
-          </p>
-        )}
-
+      <div className="mt-8 space-y-6">
         {jobs.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow">
-            <p>You have not posted any jobs yet.</p>
-
-            <Link
-              href="/employer/add-job"
-              className="inline-block mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-            >
-              Post First Job
-            </Link>
-          </div>
+          <EmptyState
+            title="No jobs posted yet"
+            description="Create your first listing to publish it to the public jobs page and start receiving applications."
+            action={
+              <Link
+                href="/employer/add-job"
+                className={buttonStyles({ variant: "primary", size: "md" })}
+              >
+                Post My First Job
+              </Link>
+            }
+          />
         ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {jobs.map((job) => (
-              <div key={job._id} className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-xl font-bold mb-2">{job.title}</h2>
-
-                <p className="text-gray-700 mb-1">
-                  <strong>Company:</strong> {job.company}
-                </p>
-
-                <p className="text-gray-700 mb-1">
-                  <strong>Location:</strong> {job.location}
-                </p>
-
-                <p className="text-gray-700 mb-1">
-                  <strong>Type:</strong> {job.jobType}
-                </p>
-
-                <p className="text-gray-700 mb-1">
-                  <strong>Salary:</strong> {job.salary}
-                </p>
-
-                <p className="text-gray-700 mb-1">
-                  <strong>Status:</strong>{" "}
-                  {job.isActive ? "Active" : "Inactive"}
-                </p>
-
-                <p className="text-gray-700 mb-4">
-                  <strong>Deadline:</strong>{" "}
-                  {new Date(job.deadline).toLocaleDateString()}
-                </p>
-
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {job.skills?.map((skill, index) => (
-                    <span
-                      key={index}
-                      className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm"
+          jobs.map((job) => (
+            <JobCard
+              key={job._id}
+              job={job}
+              userRole={user?.role}
+              showApplyAction={false}
+              footer={
+                <>
+                  <Link
+                    href={`/employer/jobs/${job._id}/edit`}
+                    className={buttonStyles({ variant: "outline", size: "sm" })}
+                  >
+                    Edit Job
+                  </Link>
+                    <Link
+                      href={`/employer/jobs/${job._id}/applicants`}
+                      className={buttonStyles({
+                        variant: "secondary",
+                        size: "sm",
+                        className: "text-white hover:text-white visited:text-white",
+                      })}
+                      style={{ color: "#ffffff" }}
                     >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="flex gap-3">
-                  <Link
-                    href={`/jobs/${job._id}`}
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                  >
-                    View
-                  </Link>
-
-                  <Link
-                    href={`/employer/jobs/${job._id}/applicants`}
-                    className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
-                  >
-                    Applicants
-                  </Link>
-
+                      View Applicants
+                    </Link>
                   <button
                     type="button"
-                    onClick={() => handleDelete(job._id)}
-                    className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                    onClick={() => setJobToDelete(job)}
+                    className={buttonStyles({ variant: "danger", size: "sm" })}
                   >
-                    Delete
+                    Delete Job
                   </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                </>
+              }
+            />
+          ))
         )}
       </div>
+
+      <ConfirmationModal
+        open={Boolean(jobToDelete)}
+        title="Delete this job?"
+        description={`This will remove "${jobToDelete?.title || "this job"}" from JobPilot. This action cannot be undone.`}
+        confirmLabel="Delete Job"
+        busy={deleting}
+        onCancel={() => setJobToDelete(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
