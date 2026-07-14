@@ -33,9 +33,9 @@ Replace the example links below with your real production URLs before publishing
 
 | Surface | Platform | Example URL |
 | --- | --- | --- |
-| Frontend | Vercel | `https://your-jobpilot.vercel.app` |
-| Backend API | Render | `https://your-jobpilot-api.onrender.com/api` |
-| Health check | Render | `https://your-jobpilot-api.onrender.com/api/health` |
+| Frontend | Vercel | https://smart-job-portal-jobpilot.vercel.app/ |
+| Backend API | Render | https://smart-job-portal-jobpilot.onrender.com/api |
+| Health check | Render | https://smart-job-portal-jobpilot.onrender.com/api/health |
 
 ## Highlights
 
@@ -120,7 +120,7 @@ Set these in your Render service for the `backend` app:
 MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_jwt_secret
 GROQ_API_KEY=your_groq_api_key
-CLIENT_URL=https://your-jobpilot.vercel.app
+CLIENT_URL=https://smart-job-portal-jobpilot.vercel.app/
 ```
 
 Notes:
@@ -133,7 +133,7 @@ Notes:
 Set this in your Vercel project for the `frontend` app:
 
 ```env
-NEXT_PUBLIC_API_URL=https://your-jobpilot-api.onrender.com/api
+NEXT_PUBLIC_API_URL=https://smart-job-portal-jobpilot.onrender.com/api
 ```
 
 Notes:
